@@ -13,8 +13,7 @@ datasource db {
 // User model for authentication and user management
 model User {
   id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
+  name          String    @unique
   password      String
   role          Role      @default(USER)
   createdAt     DateTime  @default(now())

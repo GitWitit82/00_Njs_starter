@@ -15,12 +15,12 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "relative min-h-screen border-r bg-sidebar transition-all duration-300 ease-in-out",
+        "relative min-h-screen border-r bg-background transition-all duration-300 ease-in-out",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="flex h-16 items-center justify-between px-4">
-        {!isCollapsed && <span className="text-lg font-semibold">App Name</span>}
+      <div className="flex h-16 items-center justify-between border-b px-4">
+        {!isCollapsed && <span className="text-lg font-semibold">Workflow PMS</span>}
         <Button
           variant="ghost"
           size="icon"

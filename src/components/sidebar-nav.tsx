@@ -6,7 +6,6 @@ import {
   LayoutDashboard, 
   Settings, 
   Users,
-  // Add more icons as needed
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -56,8 +55,8 @@ export function SidebarNav({ isCollapsed }: SidebarNavProps) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-full flex-col justify-between">
-      <div className="flex flex-col gap-2">
+    <div className="flex h-[calc(100vh-4rem)] flex-col justify-between py-4">
+      <div className="flex flex-col gap-2 px-2">
         {navItems.map((item) => {
           const Icon = item.icon
           return (
@@ -77,7 +76,7 @@ export function SidebarNav({ isCollapsed }: SidebarNavProps) {
         })}
       </div>
       <div className={cn(
-        "p-4",
+        "px-2",
         isCollapsed ? "flex justify-center" : ""
       )}>
         <ThemeToggle />

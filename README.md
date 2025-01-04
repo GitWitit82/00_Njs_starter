@@ -9,20 +9,22 @@ A scalable project management system built with Next.js, ShadCN, Prisma ORM, and
 - ✅ Task and Form Management
 - 👥 User Management with Role-based Access
 - 📊 Dashboards and Analytics
+- 🌓 Dark/Light Theme Support
+- 📱 Responsive Collapsible Sidebar
 
 ## Tech Stack
 
-- **Frontend:** Next.js, ShadCN (Radix + TailwindCSS)
+- **Frontend:** Next.js 14 (App Router), ShadCN (Radix + TailwindCSS)
 - **Backend:** Next.js API routes using Prisma ORM
 - **Database:** PostgreSQL
 - **Authentication:** NextAuth (JWT-based)
 - **Form Handling:** React Hook Form, Zod Validation
-- **Styling:** TailwindCSS
+- **Styling:** TailwindCSS, CSS Variables
 
 ## Prerequisites
 
 - Node.js 18+ and npm
-- PostgreSQL 15
+- PostgreSQL 15+
 - pgAdmin (for database management)
 
 ## Environment Setup
@@ -36,35 +38,88 @@ NEXTAUTH_URL="http://localhost:3000"
 
 ## Getting Started
 
-First, run the development server:
-
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Set up the database:
+```bash
+npx prisma migrate dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Create an admin user:
+```bash
+npm run seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Run the development server:
+```bash
+npm run dev
+```
+
+5. Open [http://localhost:3000](http://localhost:3000) with your browser
+
+6. Login with the default admin credentials:
+   - Username: Admin User
+   - Password: 1234
+
+## Authentication and Authorization
+
+The system uses NextAuth.js with the following features:
+
+- JWT-based authentication
+- Role-based access control (ADMIN, MANAGER, USER)
+- Protected routes and API endpoints
+- Secure password handling with bcrypt
+
+### Available Routes
+
+- `/auth/login` - Login page
+- `/users` - User management (requires ADMIN role)
+- `/dashboard` - User dashboard
+- `/settings` - User settings
+
+### Role-Based Access
+
+- **ADMIN**: Full access to all features including user management
+- **MANAGER**: Access to management features and user areas
+- **USER**: Access to basic dashboard and assigned tasks
+
+### Security Features
+
+- Username/password authentication
+- Secure password hashing with bcrypt
+- JWT token-based session management
+- Protected API routes with role-based middleware
+- CSRF protection
+
+## UI/UX Features
+
+- 🌓 Dark/Light theme support with system preference detection
+- 📱 Responsive collapsible sidebar for better mobile experience
+- 🎨 Modern and clean interface using ShadCN components
+- ⚡ Fast page transitions with Next.js App Router
+- 🎯 Consistent spacing and layout across pages
+
+## Development
+
+The project follows modern development practices:
+
+- TypeScript for type safety
+- ESLint and Prettier for code formatting
+- Component-based architecture
+- Custom hooks for shared logic
+- Zod for runtime type validation
+- React Server Components for better performance
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [TailwindCSS Documentation](https://tailwindcss.com/docs)
+- [ShadcnUI Documentation](https://ui.shadcn.com)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Contributing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Contributions are welcome! Please feel free to submit a Pull Request.

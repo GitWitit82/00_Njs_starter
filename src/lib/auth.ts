@@ -1,13 +1,10 @@
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { db } from "@/lib/db"
-import { compare } from "bcrypt"
-import { Role } from "@prisma/client"
+import bcrypt from "bcryptjs"
 
-/**
- * NextAuth configuration options
- */
+import { db } from "@/lib/db"
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
   session: {
@@ -21,17 +18,17 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        name: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.name || !credentials?.password) {
           return null
         }
 
         const user = await db.user.findUnique({
           where: {
-            email: credentials.email
+            name: credentials.name
           }
         })
 
@@ -39,7 +36,7 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const isPasswordValid = await compare(
+        const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
         )
@@ -50,7 +47,6 @@ export const authOptions: NextAuthOptions = {
 
         return {
           id: user.id,
-          email: user.email,
           name: user.name,
           role: user.role,
         }
@@ -62,7 +58,6 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id
         session.user.name = token.name
-        session.user.email = token.email
         session.user.role = token.role
       }
 
