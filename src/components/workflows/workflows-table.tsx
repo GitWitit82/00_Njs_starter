@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Edit2, Trash2 } from "lucide-react"
+import { Edit2, Trash2, ListChecks } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { Workflow } from "@prisma/client"
 
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { WorkflowModal } from "./workflow-modal"
+import { PhasesModal } from "./phases-modal"
 
 interface WorkflowsTableProps {
   workflows: Workflow[]
@@ -32,6 +33,7 @@ export function WorkflowsTable({
 }: WorkflowsTableProps) {
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isPhasesModalOpen, setIsPhasesModalOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async (id: string) => {
@@ -66,15 +68,16 @@ export function WorkflowsTable({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Phases</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Updated</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[140px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {workflows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center">
+                <TableCell colSpan={6} className="text-center">
                   No workflows found. Create your first workflow to get started.
                 </TableCell>
               </TableRow>
@@ -83,6 +86,7 @@ export function WorkflowsTable({
                 <TableRow key={workflow.id}>
                   <TableCell className="font-medium">{workflow.name}</TableCell>
                   <TableCell>{workflow.description || "No description"}</TableCell>
+                  <TableCell>{workflow._count?.phases || 0} phases</TableCell>
                   <TableCell>
                     {formatDistanceToNow(new Date(workflow.createdAt), {
                       addSuffix: true,
@@ -95,6 +99,17 @@ export function WorkflowsTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedWorkflow(workflow)
+                          setIsPhasesModalOpen(true)
+                        }}
+                      >
+                        <ListChecks className="h-4 w-4" />
+                        <span className="sr-only">Manage phases</span>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -139,6 +154,22 @@ export function WorkflowsTable({
           )
           setIsModalOpen(false)
           setSelectedWorkflow(null)
+        }}
+      />
+
+      <PhasesModal
+        workflow={selectedWorkflow}
+        open={isPhasesModalOpen}
+        onOpenChange={(open) => {
+          setIsPhasesModalOpen(open)
+          if (!open) setSelectedWorkflow(null)
+        }}
+        onSuccess={(updatedWorkflow) => {
+          setWorkflows(
+            workflows.map((w) =>
+              w.id === updatedWorkflow.id ? updatedWorkflow : w
+            )
+          )
         }}
       />
     </>
