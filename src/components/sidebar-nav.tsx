@@ -6,6 +6,7 @@ import {
   LayoutDashboard, 
   Settings, 
   Users,
+  GitBranch,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -28,6 +29,11 @@ const navItems: NavItem[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Workflows",
+    href: "/workflows",
+    icon: GitBranch,
   },
   {
     title: "Users",
