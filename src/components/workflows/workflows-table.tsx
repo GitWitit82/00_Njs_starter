@@ -1,10 +1,13 @@
 "use client"
 
+import * as React from "react"
 import { useState } from "react"
-import { Edit2, Trash2, ListChecks } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Phase, Workflow } from "@prisma/client"
 import { formatDistanceToNow } from "date-fns"
-import { Workflow } from "@prisma/client"
+import { ChevronDown, ChevronRight, Edit, Plus, Trash2 } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -13,165 +16,181 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { WorkflowModal } from "./workflow-modal"
-import { PhasesModal } from "./phases-modal"
+import { WorkflowModal } from "@/components/workflows/workflow-modal"
 
 interface WorkflowsTableProps {
-  workflows: Workflow[]
+  workflows: (Workflow & { phases: Phase[] })[]
   isLoading: boolean
-  setWorkflows: (workflows: Workflow[]) => void
+  onWorkflowChange: () => void
 }
 
-/**
- * Table component for displaying and managing workflows
- */
 export function WorkflowsTable({
   workflows,
   isLoading,
-  setWorkflows,
+  onWorkflowChange,
 }: WorkflowsTableProps) {
+  const router = useRouter()
+  const [expandedWorkflows, setExpandedWorkflows] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isPhasesModalOpen, setIsPhasesModalOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  const handleDelete = async (id: string) => {
+  const toggleExpand = (workflowId: string) => {
+    setExpandedWorkflows((prev) =>
+      prev.includes(workflowId)
+        ? prev.filter((id) => id !== workflowId)
+        : [...prev, workflowId]
+    )
+  }
+
+  const handleEdit = (workflow: Workflow) => {
+    setSelectedWorkflow(workflow)
+    setModalOpen(true)
+  }
+
+  const handleDelete = async (workflowId: string) => {
     if (!confirm("Are you sure you want to delete this workflow?")) return
 
     try {
-      setIsDeleting(true)
-      const response = await fetch(`/api/workflows/${id}`, {
+      const response = await fetch(`/api/workflows/${workflowId}`, {
         method: "DELETE",
       })
 
       if (!response.ok) throw new Error("Failed to delete workflow")
 
-      setWorkflows(workflows.filter((workflow) => workflow.id !== id))
+      onWorkflowChange()
     } catch (error) {
       console.error("Error:", error)
-      alert("Failed to delete workflow")
-    } finally {
-      setIsDeleting(false)
+      setError("Failed to delete workflow")
     }
   }
 
+  const handleWorkflowSuccess = (workflow: Workflow) => {
+    setModalOpen(false)
+    setSelectedWorkflow(null)
+    onWorkflowChange()
+  }
+
   if (isLoading) {
-    return <div>Loading workflows...</div>
+    return <div>Loading...</div>
   }
 
   return (
-    <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Phases</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead className="w-[140px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {workflows.length === 0 ? (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-md bg-destructive/15 p-4 text-destructive">
+          {error}
+        </div>
+      )}
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[40px]"></TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Phases</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="w-[100px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {workflows.map((workflow) => (
+            <React.Fragment key={workflow.id}>
               <TableRow>
-                <TableCell colSpan={6} className="text-center">
-                  No workflows found. Create your first workflow to get started.
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => toggleExpand(workflow.id)}
+                  >
+                    {expandedWorkflows.includes(workflow.id) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TableCell>
+                <TableCell className="font-medium">{workflow.name}</TableCell>
+                <TableCell>{workflow.phases.length}</TableCell>
+                <TableCell>
+                  {formatDistanceToNow(new Date(workflow.createdAt), {
+                    addSuffix: true,
+                  })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(workflow)}
+                    >
+                      <Edit className="h-4 w-4" />
+                      <span className="sr-only">Edit workflow</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(workflow.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete workflow</span>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            ) : (
-              workflows.map((workflow) => (
-                <TableRow key={workflow.id}>
-                  <TableCell className="font-medium">{workflow.name}</TableCell>
-                  <TableCell>{workflow.description || "No description"}</TableCell>
-                  <TableCell>{workflow._count?.phases || 0} phases</TableCell>
-                  <TableCell>
-                    {formatDistanceToNow(new Date(workflow.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    {formatDistanceToNow(new Date(workflow.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedWorkflow(workflow)
-                          setIsPhasesModalOpen(true)
-                        }}
-                      >
-                        <ListChecks className="h-4 w-4" />
-                        <span className="sr-only">Manage phases</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedWorkflow(workflow)
-                          setIsModalOpen(true)
-                        }}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                        <span className="sr-only">Edit workflow</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={isDeleting}
-                        onClick={() => handleDelete(workflow.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete workflow</span>
-                      </Button>
+              {expandedWorkflows.includes(workflow.id) && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <div className="pl-12 py-4">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-sm font-medium">Phases</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/workflows/${workflow.id}/phases`)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Manage Phases
+                        </Button>
+                      </div>
+                      {workflow.phases.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No phases yet. Click the button above to add phases.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {workflow.phases.map((phase) => (
+                            <div
+                              key={phase.id}
+                              className="flex items-center justify-between rounded-md border p-2"
+                            >
+                              <span className="text-sm">{phase.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => router.push(`/workflows/${workflow.id}/phases/${phase.id}`)}
+                              >
+                                View Tasks
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+            </React.Fragment>
+          ))}
+        </TableBody>
+      </Table>
 
       <WorkflowModal
         workflow={selectedWorkflow}
-        open={isModalOpen}
-        onOpenChange={(open) => {
-          setIsModalOpen(open)
-          if (!open) setSelectedWorkflow(null)
-        }}
-        onSuccess={(updatedWorkflow) => {
-          setWorkflows(
-            workflows.map((w) =>
-              w.id === updatedWorkflow.id ? updatedWorkflow : w
-            )
-          )
-          setIsModalOpen(false)
-          setSelectedWorkflow(null)
-        }}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onSuccess={handleWorkflowSuccess}
       />
-
-      <PhasesModal
-        workflow={selectedWorkflow}
-        open={isPhasesModalOpen}
-        onOpenChange={(open) => {
-          setIsPhasesModalOpen(open)
-          if (!open) setSelectedWorkflow(null)
-        }}
-        onSuccess={(updatedWorkflow) => {
-          setWorkflows(
-            workflows.map((w) =>
-              w.id === updatedWorkflow.id ? updatedWorkflow : w
-            )
-          )
-        }}
-      />
-    </>
+    </div>
   )
 } 

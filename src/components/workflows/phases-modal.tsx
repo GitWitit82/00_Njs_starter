@@ -109,6 +109,12 @@ export function PhasesModal({
       const newPhase = await response.json()
       setPhases((prev) => [...prev, newPhase])
       form.reset()
+
+      // Fetch updated workflow
+      const workflowResponse = await fetch(`/api/workflows/${workflow.id}`)
+      if (!workflowResponse.ok) throw new Error("Failed to fetch workflow")
+      const updatedWorkflow = await workflowResponse.json()
+      onSuccess(updatedWorkflow)
     } catch (error) {
       console.error("Error:", error)
       setError("Failed to create phase")
@@ -133,6 +139,12 @@ export function PhasesModal({
       if (!response.ok) throw new Error("Failed to delete phase")
 
       setPhases((prev) => prev.filter((phase) => phase.id !== phaseId))
+
+      // Fetch updated workflow
+      const workflowResponse = await fetch(`/api/workflows/${workflow.id}`)
+      if (!workflowResponse.ok) throw new Error("Failed to fetch workflow")
+      const updatedWorkflow = await workflowResponse.json()
+      onSuccess(updatedWorkflow)
     } catch (error) {
       console.error("Error:", error)
       setError("Failed to delete phase")
@@ -171,6 +183,12 @@ export function PhasesModal({
       })
 
       if (!response.ok) throw new Error("Failed to reorder phases")
+
+      // Fetch updated workflow
+      const workflowResponse = await fetch(`/api/workflows/${workflow.id}`)
+      if (!workflowResponse.ok) throw new Error("Failed to fetch workflow")
+      const updatedWorkflow = await workflowResponse.json()
+      onSuccess(updatedWorkflow)
     } catch (error) {
       console.error("Error:", error)
       setError("Failed to reorder phases")
@@ -184,7 +202,7 @@ export function PhasesModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Manage Phases</DialogTitle>
+            <DialogTitle>{workflow?.name} - Manage Phases</DialogTitle>
             <DialogDescription>
               Add, remove, and reorder phases for this workflow.
             </DialogDescription>
@@ -223,14 +241,14 @@ export function PhasesModal({
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => {
                             setSelectedPhase(phase)
                             setIsTasksModalOpen(true)
                           }}
                         >
-                          <ListTodo className="h-4 w-4" />
-                          <span className="sr-only">Manage tasks</span>
+                          <ListTodo className="mr-2 h-4 w-4" />
+                          Tasks
                         </Button>
                         <Button
                           variant="ghost"

@@ -8,8 +8,48 @@ const taskSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
-  manHours: z.number().min(0).optional(),
+  manHours: z.number().min(0.25).step(0.25),
 })
+
+/**
+ * GET /api/workflows/[workflowId]/phases/[phaseId]/tasks
+ * Get all tasks for a phase
+ */
+export async function GET(
+  req: Request,
+  context: { params: { workflowId: string; phaseId: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
+      return new NextResponse("Unauthorized", { status: 403 })
+    }
+
+    const params = await context.params
+    const { workflowId, phaseId } = params
+
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
+    const tasks = await db.task.findMany({
+      where: {
+        phaseId,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    })
+
+    return NextResponse.json(tasks)
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("[TASKS_GET]", error.message)
+    }
+    return new NextResponse("Internal error", { status: 500 })
+  }
+}
 
 /**
  * POST /api/workflows/[workflowId]/phases/[phaseId]/tasks
@@ -17,59 +57,38 @@ const taskSchema = z.object({
  */
 export async function POST(
   req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
+  context: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const body = await req.json()
-    const validatedFields = taskSchema.safeParse(body)
+    const params = await context.params
+    const { workflowId, phaseId } = params
 
-    if (!validatedFields.success) {
-      return NextResponse.json(
-        { error: "Invalid fields", issues: validatedFields.error.issues },
-        { status: 400 }
-      )
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    const { name, description, priority, manHours } = validatedFields.data
-
-    // Check if phase exists and belongs to the workflow
-    const phase = await db.phase.findUnique({
-      where: {
-        id: params.phaseId,
-        workflowId: params.workflowId,
-      },
-      include: {
-        tasks: {
-          orderBy: {
-            id: "desc",
-          },
-          take: 1,
-        },
-      },
-    })
-
-    if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
-    }
+    const json = await req.json()
+    const body = taskSchema.parse(json)
 
     const task = await db.task.create({
       data: {
-        name,
-        description,
-        priority,
-        manHours,
-        phaseId: params.phaseId,
+        ...body,
+        phaseId,
       },
     })
 
     return NextResponse.json(task)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+    }
+
     if (error instanceof Error) {
       console.error("[TASKS_POST]", error.message)
     }
@@ -83,67 +102,49 @@ export async function POST(
  */
 export async function PUT(
   req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
+  context: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const body = await req.json()
-    const { tasks } = body
+    const params = await context.params
+    const { workflowId, phaseId } = params
 
-    if (!Array.isArray(tasks)) {
-      return NextResponse.json(
-        { error: "Invalid tasks array" },
-        { status: 400 }
-      )
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    // Check if phase exists and belongs to the workflow
-    const phase = await db.phase.findUnique({
-      where: {
-        id: params.phaseId,
-        workflowId: params.workflowId,
-      },
-    })
+    const json = await req.json()
+    const { tasks } = json
 
-    if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
-    }
-
-    // Update all tasks in a transaction
-    await db.$transaction(
-      tasks.map((task) =>
-        db.task.update({
-          where: {
-            id: task.id,
-            phaseId: params.phaseId,
-          },
-          data: {
-            order: task.order,
-          },
-        })
-      )
+    const transaction = tasks.map((task: { id: string; order: number }) =>
+      db.task.update({
+        where: {
+          id: task.id,
+          phaseId,
+        },
+        data: {
+          order: task.order,
+        },
+      })
     )
 
-    // Fetch updated phase with tasks
-    const updatedPhase = await db.phase.findUnique({
+    await db.$transaction(transaction)
+
+    const updatedTasks = await db.task.findMany({
       where: {
-        id: params.phaseId,
+        phaseId,
       },
-      include: {
-        tasks: {
-          orderBy: {
-            order: "asc",
-          },
-        },
+      orderBy: {
+        order: "asc",
       },
     })
 
-    return NextResponse.json(updatedPhase)
+    return NextResponse.json(updatedTasks)
   } catch (error) {
     if (error instanceof Error) {
       console.error("[TASKS_REORDER]", error.message)

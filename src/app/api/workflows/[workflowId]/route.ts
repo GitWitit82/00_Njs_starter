@@ -4,18 +4,13 @@ import { z } from "zod"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth-utils"
 
-const workflowSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-})
-
 /**
  * GET /api/workflows/[workflowId]
- * Get a specific workflow
+ * Get a workflow with its phases
  */
 export async function GET(
   req: Request,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await getCurrentUser()
@@ -24,22 +19,28 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
+    const params = await context.params
+    const { workflowId } = params
+
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
     const workflow = await db.workflow.findUnique({
       where: {
-        id: params.workflowId,
+        id: workflowId,
       },
       include: {
         phases: {
           orderBy: {
-            order: "asc",
+            createdAt: "asc",
           },
           include: {
-            tasks: true,
-          },
-        },
-        _count: {
-          select: {
-            projects: true,
+            tasks: {
+              orderBy: {
+                createdAt: "asc",
+              },
+            },
           },
         },
       },
@@ -64,30 +65,28 @@ export async function GET(
  */
 export async function PUT(
   req: Request,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const body = await req.json()
-    const validatedFields = workflowSchema.safeParse(body)
+    const params = await context.params
+    const { workflowId } = params
 
-    if (!validatedFields.success) {
-      return NextResponse.json(
-        { error: "Invalid fields", issues: validatedFields.error.issues },
-        { status: 400 }
-      )
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    const { name, description } = validatedFields.data
+    const body = await req.json()
+    const { name, description } = body
 
     const workflow = await db.workflow.update({
       where: {
-        id: params.workflowId,
+        id: workflowId,
       },
       data: {
         name,
@@ -98,7 +97,7 @@ export async function PUT(
     return NextResponse.json(workflow)
   } catch (error) {
     if (error instanceof Error) {
-      console.error("[WORKFLOW_PUT]", error.message)
+      console.error("[WORKFLOW_UPDATE]", error.message)
     }
     return new NextResponse("Internal error", { status: 500 })
   }
@@ -110,46 +109,25 @@ export async function PUT(
  */
 export async function DELETE(
   req: Request,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    // Check if workflow has any projects
-    const workflow = await db.workflow.findUnique({
-      where: {
-        id: params.workflowId,
-      },
-      include: {
-        _count: {
-          select: {
-            projects: true,
-          },
-        },
-      },
-    })
+    const params = await context.params
+    const { workflowId } = params
 
-    if (!workflow) {
-      return new NextResponse("Workflow not found", { status: 404 })
-    }
-
-    if (workflow._count.projects > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Cannot delete workflow with existing projects. Please delete the projects first.",
-        },
-        { status: 400 }
-      )
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
     await db.workflow.delete({
       where: {
-        id: params.workflowId,
+        id: workflowId,
       },
     })
 

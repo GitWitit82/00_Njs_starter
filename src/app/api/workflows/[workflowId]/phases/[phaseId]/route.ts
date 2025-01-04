@@ -1,33 +1,41 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth-utils"
 
 /**
- * DELETE /api/workflows/[workflowId]/phases/[phaseId]
- * Delete a phase
+ * GET /api/workflows/[workflowId]/phases/[phaseId]
+ * Get a specific phase
  */
-export async function DELETE(
+export async function GET(
   req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
+  context: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    // Check if phase exists and belongs to the workflow
+    const params = await context.params
+    const { workflowId, phaseId } = params
+
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
     const phase = await db.phase.findUnique({
       where: {
-        id: params.phaseId,
-        workflowId: params.workflowId,
+        id: phaseId,
+        workflowId,
       },
       include: {
+        workflow: true,
         tasks: {
-          select: {
-            id: true,
+          orderBy: {
+            createdAt: "asc",
           },
         },
       },
@@ -37,47 +45,96 @@ export async function DELETE(
       return new NextResponse("Phase not found", { status: 404 })
     }
 
-    // Check if phase has any tasks
-    if (phase.tasks.length > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Cannot delete phase with existing tasks. Please delete the tasks first.",
-        },
-        { status: 400 }
-      )
+    return NextResponse.json(phase)
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("[PHASE_GET]", error.message)
+    }
+    return new NextResponse("Internal error", { status: 500 })
+  }
+}
+
+/**
+ * PUT /api/workflows/[workflowId]/phases/[phaseId]
+ * Update a phase
+ */
+export async function PUT(
+  req: Request,
+  context: { params: { workflowId: string; phaseId: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
+      return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    // Delete the phase
+    const params = await context.params
+    const { workflowId, phaseId } = params
+
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
+    const json = await req.json()
+    const { name, description } = json
+
+    const phase = await db.phase.update({
+      where: {
+        id: phaseId,
+        workflowId,
+      },
+      data: {
+        name,
+        description,
+      },
+      include: {
+        workflow: true,
+        tasks: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    })
+
+    return NextResponse.json(phase)
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("[PHASE_UPDATE]", error.message)
+    }
+    return new NextResponse("Internal error", { status: 500 })
+  }
+}
+
+/**
+ * DELETE /api/workflows/[workflowId]/phases/[phaseId]
+ * Delete a phase
+ */
+export async function DELETE(
+  req: Request,
+  context: { params: { workflowId: string; phaseId: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
+      return new NextResponse("Unauthorized", { status: 403 })
+    }
+
+    const params = await context.params
+    const { workflowId, phaseId } = params
+
+    if (!workflowId || !phaseId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
     await db.phase.delete({
       where: {
-        id: params.phaseId,
+        id: phaseId,
+        workflowId,
       },
     })
-
-    // Reorder remaining phases
-    const remainingPhases = await db.phase.findMany({
-      where: {
-        workflowId: params.workflowId,
-      },
-      orderBy: {
-        order: "asc",
-      },
-    })
-
-    // Update order in a transaction
-    await db.$transaction(
-      remainingPhases.map((phase, index) =>
-        db.phase.update({
-          where: {
-            id: phase.id,
-          },
-          data: {
-            order: index,
-          },
-        })
-      )
-    )
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {

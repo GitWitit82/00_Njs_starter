@@ -5,9 +5,56 @@ import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth-utils"
 
 const phaseSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  order: z.number().int().min(0),
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
 })
+
+/**
+ * GET /api/workflows/[workflowId]/phases
+ * Get all phases for a workflow
+ */
+export async function GET(
+  req: Request,
+  context: { params: { workflowId: string } }
+) {
+  try {
+    const user = await getCurrentUser()
+
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
+      return new NextResponse("Unauthorized", { status: 403 })
+    }
+
+    const params = await context.params
+    const { workflowId } = params
+
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
+    }
+
+    const phases = await db.phase.findMany({
+      where: {
+        workflowId,
+      },
+      orderBy: {
+        order: "asc",
+      },
+      include: {
+        tasks: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    })
+
+    return NextResponse.json(phases)
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error("[PHASES_GET]", error.message)
+    }
+    return new NextResponse("Internal error", { status: 500 })
+  }
+}
 
 /**
  * POST /api/workflows/[workflowId]/phases
@@ -15,48 +62,51 @@ const phaseSchema = z.object({
  */
 export async function POST(
   req: Request,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const body = await req.json()
-    const validatedFields = phaseSchema.safeParse(body)
+    const params = await context.params
+    const { workflowId } = params
 
-    if (!validatedFields.success) {
-      return NextResponse.json(
-        { error: "Invalid fields", issues: validatedFields.error.issues },
-        { status: 400 }
-      )
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    const { name, order } = validatedFields.data
+    const json = await req.json()
+    const body = phaseSchema.parse(json)
 
-    // Check if workflow exists
-    const workflow = await db.workflow.findUnique({
+    // Get the highest order value
+    const lastPhase = await db.phase.findFirst({
       where: {
-        id: params.workflowId,
+        workflowId,
+      },
+      orderBy: {
+        order: "desc",
       },
     })
 
-    if (!workflow) {
-      return new NextResponse("Workflow not found", { status: 404 })
-    }
+    const nextOrder = lastPhase ? lastPhase.order + 1 : 0
 
     const phase = await db.phase.create({
       data: {
-        name,
-        order,
-        workflowId: params.workflowId,
+        ...body,
+        workflowId,
+        order: nextOrder,
       },
     })
 
     return NextResponse.json(phase)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+    }
+
     if (error instanceof Error) {
       console.error("[PHASES_POST]", error.message)
     }
@@ -65,60 +115,44 @@ export async function POST(
 }
 
 /**
- * PUT /api/workflows/[workflowId]/phases/reorder
+ * PUT /api/workflows/[workflowId]/phases
  * Reorder phases
  */
 export async function PUT(
   req: Request,
-  { params }: { params: { workflowId: string } }
+  context: { params: { workflowId: string } }
 ) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
-    const body = await req.json()
-    const { phases } = body
+    const params = await context.params
+    const { workflowId } = params
 
-    if (!Array.isArray(phases)) {
-      return NextResponse.json(
-        { error: "Invalid phases array" },
-        { status: 400 }
-      )
+    if (!workflowId) {
+      return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    // Update all phases in a transaction
-    await db.$transaction(
-      phases.map((phase) =>
-        db.phase.update({
-          where: {
-            id: phase.id,
-            workflowId: params.workflowId,
-          },
-          data: {
-            order: phase.order,
-          },
-        })
-      )
+    const json = await req.json()
+    const { items } = json
+
+    const transaction = items.map((phase: { id: string; order: number }) =>
+      db.phase.update({
+        where: {
+          id: phase.id,
+        },
+        data: {
+          order: phase.order,
+        },
+      })
     )
 
-    // Fetch updated workflow with phases
-    const workflow = await db.workflow.findUnique({
-      where: {
-        id: params.workflowId,
-      },
-      include: {
-        phases: {
-          orderBy: {
-            order: "asc",
-          },
-        },
-      },
-    })
+    const phases = await db.$transaction(transaction)
 
-    return NextResponse.json(workflow)
+    return NextResponse.json(phases)
   } catch (error) {
     if (error instanceof Error) {
       console.error("[PHASES_REORDER]", error.message)

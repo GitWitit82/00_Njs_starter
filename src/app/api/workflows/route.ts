@@ -22,16 +22,15 @@ export async function GET() {
     }
 
     const workflows = await db.workflow.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
       include: {
-        _count: {
-          select: {
-            phases: true,
-            projects: true,
+        phases: {
+          orderBy: {
+            order: "asc",
           },
         },
+      },
+      orderBy: {
+        createdAt: "desc",
       },
     })
 
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 

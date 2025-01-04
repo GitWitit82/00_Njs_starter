@@ -8,9 +8,34 @@ import { Role } from "@prisma/client"
  */
 const routeConfig = {
   admin: ["/admin", "/users"],
-  manager: ["/manager"],
+  manager: ["/manager", "/workflows"],
   user: ["/dashboard"],
   public: ["/", "/auth/login", "/auth/register", "/api/auth"],
+}
+
+/**
+ * Check if a user has access to a route based on their role
+ */
+function checkAuthorization(pathname: string, role: Role): boolean {
+  // Admin has access to all routes
+  if (role === "ADMIN") {
+    return true
+  }
+
+  // Manager has access to manager and user routes
+  if (role === "MANAGER") {
+    return (
+      routeConfig.manager.some(path => pathname.startsWith(path)) ||
+      routeConfig.user.some(path => pathname.startsWith(path))
+    )
+  }
+
+  // User has access to user routes only
+  if (role === "USER") {
+    return routeConfig.user.some(path => pathname.startsWith(path))
+  }
+
+  return false
 }
 
 /**
@@ -43,28 +68,10 @@ export async function middleware(request: NextRequest) {
   const isAuthorized = checkAuthorization(pathname, userRole)
 
   if (!isAuthorized) {
-    return new NextResponse("Unauthorized", { status: 403 })
+    return NextResponse.redirect(new URL("/unauthorized", request.url))
   }
 
   return NextResponse.next()
-}
-
-/**
- * Check if the user has access to the requested path
- * @param path - The requested path
- * @param role - The user's role
- */
-function checkAuthorization(path: string, role: Role): boolean {
-  switch (role) {
-    case "ADMIN":
-      return true // Admin has access to everything
-    case "MANAGER":
-      return !path.startsWith("/admin") // Manager has access to everything except admin routes
-    case "USER":
-      return routeConfig.user.some(route => path.startsWith(route)) // Users only have access to user routes
-    default:
-      return false
-  }
 }
 
 /**

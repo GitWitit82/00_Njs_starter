@@ -32,12 +32,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 
 const taskSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
-  manHours: z.number().min(0).optional(),
+  manHours: z.number().min(0.25).step(0.25),
 })
 
 type FormData = z.infer<typeof taskSchema>
@@ -72,7 +73,7 @@ export function TasksModal({
       name: "",
       description: "",
       priority: "MEDIUM",
-      manHours: 0,
+      manHours: 0.25,
     },
   })
 
@@ -184,7 +185,13 @@ export function TasksModal({
         }
       )
 
-      if (!response.ok) throw new Error("Failed to reorder tasks")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to reorder tasks")
+      }
+
+      const updatedPhase = await response.json()
+      setTasks(updatedPhase.tasks)
     } catch (error) {
       console.error("Error:", error)
       setError("Failed to reorder tasks")
@@ -197,7 +204,7 @@ export function TasksModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Manage Tasks</DialogTitle>
+          <DialogTitle>{phase?.name} - Manage Tasks </DialogTitle>
           <DialogDescription>
             Add, remove, and reorder tasks for this phase.
           </DialogDescription>
@@ -232,28 +239,39 @@ export function TasksModal({
                     }}
                   >
                     <GripVertical className="h-4 w-4 cursor-move text-muted-foreground" />
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{task.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {task.priority}
-                        </span>
-                      </div>
+                    <div className="flex-1">
+                      <div className="font-medium">{task.name}</div>
                       {task.description && (
-                        <p className="text-sm text-muted-foreground">
+                        <div className="text-sm text-muted-foreground">
                           {task.description}
-                        </p>
+                        </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(task.id)}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete task</span>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          task.priority === "HIGH"
+                            ? "destructive"
+                            : task.priority === "MEDIUM"
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {task.priority}
+                      </Badge>
+                      <div className="text-sm text-muted-foreground">
+                        {task.manHours}h
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(task.id)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Delete task</span>
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -337,8 +355,8 @@ export function TasksModal({
                         <FormControl>
                           <Input
                             type="number"
-                            min="0"
-                            step="0.5"
+                            min="0.25"
+                            step="0.25"
                             placeholder="Enter estimated hours"
                             {...field}
                             onChange={(e) => field.onChange(parseFloat(e.target.value))}
