@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Phase, Workflow } from "@prisma/client"
-import { GripVertical, Plus, Trash2 } from "lucide-react"
+import { GripVertical, Plus, Trash2, ListTodo } from "lucide-react"
 import * as z from "zod"
 
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { TasksModal } from "./tasks-modal"
 
 const phaseSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -52,6 +53,8 @@ export function PhasesModal({
   onSuccess,
 }: PhasesModalProps) {
   const [phases, setPhases] = useState<Phase[]>([])
+  const [selectedPhase, setSelectedPhase] = useState<Phase | null>(null)
+  const [isTasksModalOpen, setIsTasksModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -177,93 +180,118 @@ export function PhasesModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Manage Phases</DialogTitle>
-          <DialogDescription>
-            Add, remove, and reorder phases for this workflow.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Manage Phases</DialogTitle>
+            <DialogDescription>
+              Add, remove, and reorder phases for this workflow.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          {error && (
-            <div className="rounded-md bg-destructive/15 p-4 text-destructive">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Current Phases</h3>
-            {phases.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No phases yet. Add your first phase below.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {phases.map((phase) => (
-                  <div
-                    key={phase.id}
-                    className="flex items-center gap-2 rounded-md border p-2"
-                    draggable
-                    onDragStart={(e) => e.dataTransfer.setData("text/plain", phase.id)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      const draggedId = e.dataTransfer.getData("text/plain")
-                      handleReorder(draggedId, phase.id)
-                    }}
-                  >
-                    <GripVertical className="h-4 w-4 cursor-move text-muted-foreground" />
-                    <span className="flex-1">{phase.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(phase.id)}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete phase</span>
-                    </Button>
-                  </div>
-                ))}
+          <div className="space-y-4">
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-4 text-destructive">
+                {error}
               </div>
             )}
-          </div>
 
-          <div className="border-t pt-4">
-            <h3 className="mb-2 text-sm font-medium">Add New Phase</h3>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="flex items-end gap-2"
-              >
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Enter phase name"
-                          {...field}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Current Phases</h3>
+              {phases.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No phases yet. Add your first phase below.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {phases.map((phase) => (
+                    <div
+                      key={phase.id}
+                      className="flex items-center gap-2 rounded-md border p-2"
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData("text/plain", phase.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const draggedId = e.dataTransfer.getData("text/plain")
+                        handleReorder(draggedId, phase.id)
+                      }}
+                    >
+                      <GripVertical className="h-4 w-4 cursor-move text-muted-foreground" />
+                      <span className="flex-1">{phase.name}</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedPhase(phase)
+                            setIsTasksModalOpen(true)
+                          }}
+                        >
+                          <ListTodo className="h-4 w-4" />
+                          <span className="sr-only">Manage tasks</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(phase.id)}
                           disabled={isLoading}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" disabled={isLoading}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Phase
-                </Button>
-              </form>
-            </Form>
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete phase</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="mb-2 text-sm font-medium">Add New Phase</h3>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="flex items-end gap-2"
+                >
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter phase name"
+                            {...field}
+                            disabled={isLoading}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={isLoading}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Phase
+                  </Button>
+                </form>
+              </Form>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <TasksModal
+        workflow={workflow}
+        phase={selectedPhase}
+        open={isTasksModalOpen}
+        onOpenChange={(open) => {
+          setIsTasksModalOpen(open)
+          if (!open) setSelectedPhase(null)
+        }}
+      />
+    </>
   )
 } 
