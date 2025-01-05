@@ -1,132 +1,64 @@
 import { NextResponse } from "next/server"
+import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/db"
 import { z } from "zod"
 
-// Schema for form field validation
-const formFieldSchema = z.object({
-  id: z.string(),
-  type: z.enum([
-    "TEXT",
-    "TEXTAREA",
-    "NUMBER",
-    "CHECKBOX",
-    "RADIO",
-    "SELECT",
-    "DATE",
-    "TIME",
-    "DATETIME",
-    "CUSTOM",
-  ]),
-  label: z.string(),
-  required: z.boolean().default(false),
-  defaultValue: z.any().optional(),
-  options: z.array(z.any()).optional(),
-  validation: z.record(z.any()).optional(),
-  metadata: z.record(z.any()).optional(),
-})
+import { authOptions } from "@/lib/auth"
 
-// Schema for form template creation
 const formTemplateSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   type: z.enum(["CHECKLIST", "FORM", "CUSTOM"]),
   departmentId: z.string().optional(),
   phaseId: z.string(),
-  schema: z.object({
-    fields: z.array(formFieldSchema),
-    sections: z.array(z.object({
-      id: z.string(),
-      title: z.string(),
-      description: z.string().optional(),
-      fields: z.array(z.string()), // Field IDs
-    })).optional(),
-    layout: z.record(z.any()).optional(),
-  }),
-  layout: z.record(z.any()).optional(),
-  style: z.record(z.any()).optional(),
-  metadata: z.record(z.any()).optional(),
+  schema: z.any(),
+  layout: z.any().optional(),
+  style: z.any().optional(),
+  metadata: z.any().optional(),
   order: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 })
 
-/**
- * GET /api/forms/templates
- * Get all form templates with optional filtering
- */
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get("type")
-    const departmentId = searchParams.get("departmentId")
-    const phaseId = searchParams.get("phaseId")
-    const search = searchParams.get("search")
-    const activeOnly = searchParams.get("activeOnly") === "true"
-
-    const where = {
-      ...(type && { type }),
-      ...(departmentId && { departmentId }),
-      ...(phaseId && { phaseId }),
-      ...(activeOnly && { isActive: true }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { description: { contains: search, mode: "insensitive" } },
-        ],
-      }),
-    }
-
-    const templates = await prisma.formTemplate.findMany({
-      where,
+    const templates = await db.formTemplate.findMany({
       include: {
         department: true,
-        phase: {
-          select: {
-            id: true,
-            name: true,
-            workflow: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
+        phase: true,
       },
-      orderBy: [
-        { order: "asc" },
-        { createdAt: "desc" },
-      ],
+      orderBy: {
+        createdAt: "desc",
+      },
     })
 
     return NextResponse.json(templates)
   } catch (error) {
     console.error("[FORM_TEMPLATES_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
-/**
- * POST /api/forms/templates
- * Create a new form template
- */
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.role || !["ADMIN", "MANAGER"].includes(session.user.role)) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
       return new NextResponse("Forbidden", { status: 403 })
     }
 
     const json = await request.json()
     const body = formTemplateSchema.parse(json)
 
-    // Validate phase exists
-    const phase = await prisma.phase.findUnique({
+    // Check if phase exists
+    const phase = await db.phase.findUnique({
       where: { id: body.phaseId },
     })
 
@@ -134,9 +66,9 @@ export async function POST(request: Request) {
       return new NextResponse("Phase not found", { status: 404 })
     }
 
-    // If department is specified, validate it exists
+    // Check if department exists if provided
     if (body.departmentId) {
-      const department = await prisma.department.findUnique({
+      const department = await db.department.findUnique({
         where: { id: body.departmentId },
       })
 
@@ -145,39 +77,34 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create the template
-    const template = await prisma.formTemplate.create({
+    const template = await db.formTemplate.create({
       data: {
-        ...body,
+        name: body.name,
+        description: body.description,
+        type: body.type,
+        departmentId: body.departmentId,
+        phaseId: body.phaseId,
         schema: body.schema,
-        layout: body.layout || {},
-        style: body.style || {},
-        metadata: body.metadata || {},
+        layout: body.layout,
+        style: body.style,
+        metadata: body.metadata,
+        order: body.order ?? 0,
+        isActive: body.isActive ?? true,
       },
       include: {
         department: true,
-        phase: {
-          select: {
-            id: true,
-            name: true,
-            workflow: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
+        phase: true,
       },
     })
 
     return NextResponse.json(template)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 422 })
-    }
-
     console.error("[FORM_TEMPLATES_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
+        status: 400,
+      })
+    }
+    return new NextResponse("Internal error", { status: 500 })
   }
 } 

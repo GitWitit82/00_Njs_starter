@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { db } from "@/lib/db"
 
 const departmentSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -13,7 +13,7 @@ const departmentSchema = z.object({
 
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -21,10 +21,8 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const department = await prisma.department.findUnique({
-      where: {
-        id: context.params.id,
-      },
+    const department = await db.department.findUnique({
+      where: { id: params.id },
     })
 
     if (!department) {
@@ -40,7 +38,7 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -56,39 +54,35 @@ export async function PUT(
     const body = departmentSchema.parse(json)
 
     // Check if department exists
-    const existingDepartment = await prisma.department.findUnique({
-      where: {
-        id: context.params.id,
-      },
+    const existingDepartment = await db.department.findUnique({
+      where: { id: params.id },
     })
 
     if (!existingDepartment) {
       return new NextResponse("Department not found", { status: 404 })
     }
 
-    // Check if another department has the same name
-    const duplicateName = await prisma.department.findFirst({
-      where: {
-        name: body.name,
-        NOT: {
-          id: context.params.id,
+    // Check if name is taken by another department
+    if (body.name !== existingDepartment.name) {
+      const nameExists = await db.department.findFirst({
+        where: {
+          name: body.name,
+          NOT: { id: params.id },
         },
-      },
-    })
+      })
 
-    if (duplicateName) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "A department with this name already exists",
-        }),
-        { status: 400 }
-      )
+      if (nameExists) {
+        return new NextResponse(
+          JSON.stringify({
+            error: "A department with this name already exists",
+          }),
+          { status: 400 }
+        )
+      }
     }
 
-    const department = await prisma.department.update({
-      where: {
-        id: context.params.id,
-      },
+    const department = await db.department.update({
+      where: { id: params.id },
       data: {
         name: body.name,
         description: body.description,
@@ -110,7 +104,7 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -123,12 +117,11 @@ export async function DELETE(
     }
 
     // Check if department exists
-    const department = await prisma.department.findUnique({
-      where: {
-        id: context.params.id,
-      },
+    const department = await db.department.findUnique({
+      where: { id: params.id },
       include: {
-        tasks: true,
+        workflowTasks: true,
+        projectTasks: true,
       },
     })
 
@@ -137,19 +130,17 @@ export async function DELETE(
     }
 
     // Check if department has any tasks
-    if (department.tasks.length > 0) {
+    if (department.workflowTasks.length > 0 || department.projectTasks.length > 0) {
       return new NextResponse(
         JSON.stringify({
-          error: "Cannot delete department with existing tasks",
+          error: "Cannot delete department with associated tasks",
         }),
         { status: 400 }
       )
     }
 
-    await prisma.department.delete({
-      where: {
-        id: context.params.id,
-      },
+    await db.department.delete({
+      where: { id: params.id },
     })
 
     return new NextResponse(null, { status: 204 })

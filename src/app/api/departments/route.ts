@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { db } from "@/lib/db"
 
 const departmentSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -18,7 +18,7 @@ export async function GET() {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const departments = await prisma.department.findMany({
+    const departments = await db.department.findMany({
       orderBy: {
         createdAt: "desc",
       },
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const body = departmentSchema.parse(json)
 
     // Check if department with same name already exists
-    const existingDepartment = await prisma.department.findFirst({
+    const existingDepartment = await db.department.findFirst({
       where: {
         name: body.name,
       },
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const department = await prisma.department.create({
+    const department = await db.department.create({
       data: {
         name: body.name,
         description: body.description,

@@ -1,136 +1,70 @@
 import { NextResponse } from "next/server"
+import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/db"
 import { z } from "zod"
 
-// Schema for project creation/update
+import { authOptions } from "@/lib/auth"
+
 const projectSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
-  workflowId: z.string().min(1, "Workflow is required"),
-  startDate: z.string().transform((str) => new Date(str)),
-  endDate: z.string().optional().transform((str) => (str ? new Date(str) : undefined)),
+  workflowId: z.string(),
+  managerId: z.string(),
 })
 
-/**
- * GET /api/projects
- * Get all projects with optional filtering and pagination
- */
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "10")
-    const status = searchParams.get("status")
-    const search = searchParams.get("search")
-
-    const where = {
-      ...(status && { status }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { description: { contains: search, mode: "insensitive" } },
-        ],
-      }),
-    }
-
-    const [projects, total] = await Promise.all([
-      prisma.project.findMany({
-        where,
-        include: {
-          workflow: true,
-          manager: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-          phases: {
-            include: {
-              tasks: {
-                select: {
-                  id: true,
-                  status: true,
-                },
-              },
-            },
+    const projects = await db.project.findMany({
+      include: {
+        manager: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
           },
         },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.project.count({ where }),
-    ])
-
-    // Calculate progress for each project
-    const projectsWithProgress = projects.map((project) => {
-      const totalTasks = project.phases.reduce(
-        (acc, phase) => acc + phase.tasks.length,
-        0
-      )
-      const completedTasks = project.phases.reduce(
-        (acc, phase) =>
-          acc +
-          phase.tasks.filter((task) => task.status === "COMPLETED").length,
-        0
-      )
-      const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
-
-      return {
-        ...project,
-        progress: Math.round(progress),
-        _count: {
-          tasks: totalTasks,
-          completedTasks,
+        phases: {
+          include: {
+            tasks: true,
+          },
         },
-      }
-    })
-
-    return NextResponse.json({
-      projects: projectsWithProgress,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
       },
     })
+
+    return NextResponse.json(projects)
   } catch (error) {
     console.error("[PROJECTS_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
-/**
- * POST /api/projects
- * Create a new project
- */
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
+      return new NextResponse("Forbidden", { status: 403 })
     }
 
     const json = await request.json()
     const body = projectSchema.parse(json)
 
-    // Get the workflow to copy its structure
-    const workflow = await prisma.workflow.findUnique({
+    // Check if workflow exists
+    const workflow = await db.workflow.findUnique({
       where: { id: body.workflowId },
       include: {
         phases: {
           include: {
             tasks: true,
-            formTemplates: true,
           },
         },
       },
@@ -140,15 +74,14 @@ export async function POST(request: Request) {
       return new NextResponse("Workflow not found", { status: 404 })
     }
 
-    // Create project with its phases and tasks
-    const project = await prisma.project.create({
+    // Create project with phases and tasks from workflow
+    const project = await db.project.create({
       data: {
         name: body.name,
         description: body.description,
-        startDate: body.startDate,
-        endDate: body.endDate,
-        workflowId: workflow.id,
-        managerId: session.user.id,
+        workflowId: body.workflowId,
+        managerId: body.managerId,
+        startDate: new Date(),
         phases: {
           create: workflow.phases.map((phase) => ({
             name: phase.name,
@@ -170,7 +103,6 @@ export async function POST(request: Request) {
         },
       },
       include: {
-        workflow: true,
         manager: {
           select: {
             id: true,
@@ -189,11 +121,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(project)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 422 })
-    }
-
     console.error("[PROJECTS_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
+        status: 400,
+      })
+    }
+    return new NextResponse("Internal error", { status: 500 })
   }
 } 

@@ -1,40 +1,29 @@
 import { NextResponse } from "next/server"
+import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/db"
 import { z } from "zod"
 
-// Schema for phase creation/update
+import { authOptions } from "@/lib/auth"
+
 const phaseSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   order: z.number().int().min(0),
 })
 
-/**
- * GET /api/projects/[projectId]/phases
- * Get all phases for a project
- */
 export async function GET(
   request: Request,
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: { id: true },
-    })
-
-    if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
-    }
-
-    const phases = await prisma.projectPhase.findMany({
+    const phases = await db.projectPhase.findMany({
       where: { projectId: params.projectId },
+      orderBy: { order: "asc" },
       include: {
         tasks: {
           orderBy: { order: "asc" },
@@ -51,49 +40,26 @@ export async function GET(
           },
         },
       },
-      orderBy: { order: "asc" },
     })
 
-    // Calculate progress for each phase
-    const phasesWithProgress = phases.map((phase) => {
-      const totalTasks = phase.tasks.length
-      const completedTasks = phase.tasks.filter(
-        (task) => task.status === "COMPLETED"
-      ).length
-      const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
-
-      return {
-        ...phase,
-        progress: Math.round(progress),
-        _count: {
-          tasks: totalTasks,
-          completedTasks,
-        },
-      }
-    })
-
-    return NextResponse.json(phasesWithProgress)
+    return NextResponse.json(phases)
   } catch (error) {
-    console.error("[PHASES_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("[PROJECT_PHASES_GET]", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
-/**
- * POST /api/projects/[projectId]/phases
- * Create a new phase in the project
- */
 export async function POST(
   request: Request,
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const project = await prisma.project.findUnique({
+    const project = await db.project.findUnique({
       where: { id: params.projectId },
       select: { managerId: true },
     })
@@ -102,7 +68,7 @@ export async function POST(
       return new NextResponse("Project not found", { status: 404 })
     }
 
-    // Only allow manager or admin to add phases
+    // Only allow manager or admin to create phases
     if (
       project.managerId !== session.user.id &&
       session.user.role !== "ADMIN"
@@ -113,9 +79,9 @@ export async function POST(
     const json = await request.json()
     const body = phaseSchema.parse(json)
 
-    // If order is specified, shift existing phases
+    // If order is provided, shift existing phases
     if (body.order !== undefined) {
-      await prisma.projectPhase.updateMany({
+      await db.projectPhase.updateMany({
         where: {
           projectId: params.projectId,
           order: {
@@ -130,23 +96,39 @@ export async function POST(
       })
     }
 
-    const phase = await prisma.projectPhase.create({
+    const phase = await db.projectPhase.create({
       data: {
-        ...body,
+        name: body.name,
+        description: body.description,
+        order: body.order,
         projectId: params.projectId,
       },
       include: {
-        tasks: true,
+        tasks: {
+          orderBy: { order: "asc" },
+          include: {
+            department: true,
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        },
       },
     })
 
     return NextResponse.json(phase)
   } catch (error) {
+    console.error("[PROJECT_PHASES_POST]", error)
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 422 })
+      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
+        status: 400,
+      })
     }
-
-    console.error("[PHASES_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return new NextResponse("Internal error", { status: 500 })
   }
 } 

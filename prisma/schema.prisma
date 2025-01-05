@@ -43,6 +43,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  password      String?
   role          Role      @default(USER)
   accounts      Account[]
   sessions      Session[]
@@ -215,6 +216,7 @@ model Department {
   workflowTasks WorkflowTask[]
   projectTasks  ProjectTask[]
   users         User[]         @relation("UserDepartments")
+  formTemplates FormTemplate[]
 }
 
 model UserPreference {

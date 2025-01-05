@@ -8,9 +8,9 @@ import { Role } from "@prisma/client"
  */
 const routeConfig = {
   admin: ["/admin", "/users"],
-  manager: ["/manager", "/workflows"],
-  user: ["/dashboard"],
-  public: ["/", "/auth/login", "/auth/register", "/api/auth"],
+  manager: ["/workflows", "/departments"],
+  user: ["/dashboard", "/settings"],
+  public: ["/", "/auth/login", "/auth/register", "/auth/error", "/api/auth"],
 }
 
 /**
@@ -85,6 +85,7 @@ export const config = {
      * 2. _next/image (image optimization files)
      * 3. favicon.ico (favicon file)
      * 4. public folder
+     * 5. api/auth routes (handled by NextAuth)
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\..*|api/auth).*)",
   ],

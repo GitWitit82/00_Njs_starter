@@ -21,6 +21,7 @@ async function main() {
     data: {
       name: "admin",
       email: "admin@example.com",
+      password: hashedPassword,
       role: "ADMIN",
       preferences: {
         create: {

@@ -12,12 +12,12 @@ const phaseUpdateSchema = z.object({
 })
 
 /**
- * PUT /api/projects/[projectId]/phases/[id]
+ * PUT /api/projects/[projectId]/phases/[phaseId]
  * Update a phase
  */
 export async function PUT(
   request: Request,
-  { params }: { params: { projectId: string; id: string } }
+  { params }: { params: { projectId: string; phaseId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -48,7 +48,7 @@ export async function PUT(
     // If order is changed, handle reordering
     if (body.order !== undefined) {
       const currentPhase = await prisma.projectPhase.findUnique({
-        where: { id: params.id },
+        where: { id: params.phaseId },
         select: { order: true },
       })
 
@@ -91,7 +91,7 @@ export async function PUT(
     }
 
     const phase = await prisma.projectPhase.update({
-      where: { id: params.id },
+      where: { id: params.phaseId },
       data: body,
       include: {
         tasks: {
@@ -137,12 +137,12 @@ export async function PUT(
 }
 
 /**
- * DELETE /api/projects/[projectId]/phases/[id]
+ * DELETE /api/projects/[projectId]/phases/[phaseId]
  * Delete a phase
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { projectId: string; id: string } }
+  { params }: { params: { projectId: string; phaseId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -168,7 +168,7 @@ export async function DELETE(
     }
 
     const phase = await prisma.projectPhase.findUnique({
-      where: { id: params.id },
+      where: { id: params.phaseId },
       select: { order: true },
     })
 
@@ -178,7 +178,7 @@ export async function DELETE(
 
     // Delete the phase
     await prisma.projectPhase.delete({
-      where: { id: params.id },
+      where: { id: params.phaseId },
     })
 
     // Reorder remaining phases
