@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Phase, Task, Workflow } from "@prisma/client"
+import { useState, useEffect } from "react"
+import { Phase, Task, Workflow, Department } from "@prisma/client"
 import { formatDistanceToNow } from "date-fns"
 import { Trash2 } from "lucide-react"
 
@@ -30,6 +30,23 @@ export function TasksTable({
   onTaskChange,
 }: TasksTableProps) {
   const [error, setError] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response = await fetch("/api/departments")
+        if (!response.ok) throw new Error("Failed to fetch departments")
+        const data = await response.json()
+        setDepartments(data)
+      } catch (error) {
+        console.error("Error:", error)
+        setError("Failed to load departments")
+      }
+    }
+
+    fetchDepartments()
+  }, [])
 
   const handleDelete = async (taskId: string) => {
     if (!confirm("Are you sure you want to delete this task?")) return
@@ -51,6 +68,18 @@ export function TasksTable({
     }
   }
 
+  const getDepartmentColor = (departmentId: string | null) => {
+    if (!departmentId) return null
+    const department = departments.find((d) => d.id === departmentId)
+    return department?.color || null
+  }
+
+  const getDepartmentName = (departmentId: string | null) => {
+    if (!departmentId) return "No department"
+    const department = departments.find((d) => d.id === departmentId)
+    return department?.name || "Unknown department"
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -64,6 +93,7 @@ export function TasksTable({
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Department</TableHead>
             <TableHead>Priority</TableHead>
             <TableHead>Hours</TableHead>
             <TableHead>Created</TableHead>
@@ -75,6 +105,19 @@ export function TasksTable({
             <TableRow key={task.id}>
               <TableCell className="font-medium">{task.name}</TableCell>
               <TableCell>{task.description || "No description"}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  {task.departmentId && (
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{
+                        backgroundColor: getDepartmentColor(task.departmentId),
+                      }}
+                    />
+                  )}
+                  {getDepartmentName(task.departmentId)}
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge
                   variant={

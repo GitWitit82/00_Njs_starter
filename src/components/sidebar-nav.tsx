@@ -2,91 +2,93 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { 
-  LayoutDashboard, 
-  Settings, 
+import { useSession } from "next-auth/react"
+import {
+  LayoutDashboard,
+  Settings,
   Users,
-  GitBranch,
+  Workflow,
+  Building2,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { Button } from "@/components/ui/button"
 
-/**
- * Navigation item type definition
- */
-type NavItem = {
-  title: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-}
-
-/**
- * Navigation items configuration
- */
-const navItems: NavItem[] = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Workflows",
-    href: "/workflows",
-    icon: GitBranch,
-  },
-  {
-    title: "Users",
-    href: "/users",
-    icon: Users,
-  },
-  {
-    title: "Settings",
-    href: "/settings",
-    icon: Settings,
-  },
-]
-
-/**
- * Props for the SidebarNav component
- */
 interface SidebarNavProps {
   isCollapsed: boolean
 }
 
-/**
- * SidebarNav component that displays navigation items and theme toggle
- */
 export function SidebarNav({ isCollapsed }: SidebarNavProps) {
   const pathname = usePathname()
+  const { data: session } = useSession()
+
+  const isAdmin = session?.user?.role === "ADMIN"
+  const isManager = isAdmin || session?.user?.role === "MANAGER"
+
+  const routes = [
+    {
+      href: "/dashboard",
+      icon: LayoutDashboard,
+      title: "Dashboard",
+      label: "Dashboard",
+    },
+    {
+      href: "/workflows",
+      icon: Workflow,
+      title: "Workflows",
+      label: "Workflows",
+      show: isManager,
+    },
+    {
+      href: "/departments",
+      icon: Building2,
+      title: "Departments",
+      label: "Departments",
+      show: isManager,
+    },
+    {
+      href: "/users",
+      icon: Users,
+      title: "Users",
+      label: "Users",
+      show: isAdmin,
+    },
+    {
+      href: "/settings",
+      icon: Settings,
+      title: "Settings",
+      label: "Settings",
+    },
+  ]
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col justify-between py-4">
-      <div className="flex flex-col gap-2 px-2">
-        {navItems.map((item) => {
-          const Icon = item.icon
+    <div
+      data-collapsed={isCollapsed}
+      className="group flex flex-col gap-4 py-2 data-[collapsed=true]:py-2"
+    >
+      <nav className="grid gap-1 px-2">
+        {routes.map((route) => {
+          if (route.show === false) return null
+          if (route.show !== undefined && !route.show) return null
+
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={route.href}
+              href={route.href}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                pathname === item.href && "bg-accent text-accent-foreground",
-                isCollapsed ? "justify-center" : ""
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                pathname === route.href
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground",
+                isCollapsed && "justify-center"
               )}
             >
-              <Icon className="h-4 w-4" />
-              {!isCollapsed && <span>{item.title}</span>}
+              <route.icon className="h-4 w-4" />
+              {!isCollapsed && <span>{route.label}</span>}
             </Link>
           )
         })}
-      </div>
-      <div className={cn(
-        "px-2",
-        isCollapsed ? "flex justify-center" : ""
-      )}>
-        <ThemeToggle />
-      </div>
+      </nav>
     </div>
   )
 } 

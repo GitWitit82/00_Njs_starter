@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { Phase, Task, Workflow } from "@prisma/client"
+import { Phase, Task, Workflow, Department } from "@prisma/client"
 import { GripVertical, Plus, Trash2 } from "lucide-react"
 import * as z from "zod"
 
@@ -39,6 +39,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
   manHours: z.number().min(0.25).step(0.25),
+  departmentId: z.string().optional(),
 })
 
 type FormData = z.infer<typeof taskSchema>
@@ -64,6 +65,7 @@ export function TasksModal({
   onOpenChange,
 }: TasksModalProps) {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -74,6 +76,7 @@ export function TasksModal({
       description: "",
       priority: "MEDIUM",
       manHours: 0.25,
+      departmentId: undefined,
     },
   })
 
@@ -99,6 +102,23 @@ export function TasksModal({
 
     fetchTasks()
   }, [workflow, phase])
+
+  // Fetch departments
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response = await fetch("/api/departments")
+        if (!response.ok) throw new Error("Failed to fetch departments")
+        const data = await response.json()
+        setDepartments(data)
+      } catch (error) {
+        console.error("Error:", error)
+        setError("Failed to load departments")
+      }
+    }
+
+    fetchDepartments()
+  }, [])
 
   const onSubmit = async (values: FormData) => {
     if (!workflow || !phase) return
@@ -259,6 +279,16 @@ export function TasksModal({
                       >
                         {task.priority}
                       </Badge>
+                      {task.departmentId && (
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{
+                            backgroundColor:
+                              departments.find((d) => d.id === task.departmentId)
+                                ?.color || "transparent",
+                          }}
+                        />
+                      )}
                       <div className="text-sm text-muted-foreground">
                         {task.manHours}h
                       </div>
@@ -318,12 +348,12 @@ export function TasksModal({
                   )}
                 />
 
-                <div className="flex gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="priority"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem>
                         <FormLabel>Priority</FormLabel>
                         <Select
                           onValueChange={field.onChange}
@@ -350,7 +380,7 @@ export function TasksModal({
                     control={form.control}
                     name="manHours"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem>
                         <FormLabel>Estimated Hours</FormLabel>
                         <FormControl>
                           <Input
@@ -368,6 +398,41 @@ export function TasksModal({
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="departmentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        disabled={isLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select department" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {departments.map((department) => (
+                            <SelectItem key={department.id} value={department.id}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-3 w-3 rounded-full"
+                                  style={{ backgroundColor: department.color }}
+                                />
+                                {department.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="flex justify-end">
                   <Button type="submit" disabled={isLoading}>
