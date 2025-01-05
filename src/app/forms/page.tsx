@@ -1,89 +1,57 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import Link from "next/link"
+import { Suspense } from "react"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { redirect } from "next/navigation"
+import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
-import { FormType } from "@prisma/client"
-import { toast } from "sonner"
+import { FormTemplateList } from "@/components/forms/FormTemplateList"
+import { PlusIcon } from "lucide-react"
+import Link from "next/link"
 
-interface FormTemplate {
-  id: string
-  name: string
-  description?: string
-  type: FormType
-  createdAt: string
-  updatedAt: string
+async function getFormTemplates() {
+  return prisma.formTemplate.findMany({
+    include: {
+      department: true,
+      phase: true,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  })
 }
 
-export default function FormsPage() {
-  const [templates, setTemplates] = useState<FormTemplate[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+/**
+ * Forms page displays a list of form templates and provides options to create new templates
+ */
+export default async function FormsPage() {
+  const session = await getServerSession(authOptions)
 
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        const response = await fetch("/api/forms/templates")
-        if (!response.ok) {
-          throw new Error("Failed to fetch templates")
-        }
-        const data = await response.json()
-        setTemplates(data)
-      } catch (error) {
-        toast.error("Failed to load form templates")
-      } finally {
-        setIsLoading(false)
-      }
-    }
+  if (!session) {
+    redirect("/auth/signin")
+  }
 
-    fetchTemplates()
-  }, [])
+  const templates = await getFormTemplates()
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Form Templates</h1>
-        <Link href="/forms/builder">
-          <Button>Create Template</Button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Forms</h1>
+          <p className="text-muted-foreground">
+            Manage form templates and responses for your workflows
+          </p>
+        </div>
+        <Link href="/forms/templates/new">
+          <Button>
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Create Template
+          </Button>
         </Link>
       </div>
 
-      {isLoading ? (
-        <div className="text-center">Loading...</div>
-      ) : templates.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground">No form templates found.</p>
-          <p className="mt-2">
-            <Link href="/forms/builder" className="text-primary hover:underline">
-              Create your first template
-            </Link>
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => (
-            <Link
-              key={template.id}
-              href={`/forms/templates/${template.id}`}
-              className="block"
-            >
-              <div className="border rounded-lg p-4 hover:border-primary transition-colors">
-                <h2 className="font-semibold mb-2">{template.name}</h2>
-                {template.description && (
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {template.description}
-                  </p>
-                )}
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{template.type}</span>
-                  <span>
-                    {new Date(template.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      <Suspense fallback={<div>Loading templates...</div>}>
+        <FormTemplateList templates={templates} />
+      </Suspense>
     </div>
   )
 } 

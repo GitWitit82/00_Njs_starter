@@ -3,33 +3,6 @@ import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { FormBuilder } from "@/components/forms/FormBuilder"
-import { notFound } from "next/navigation"
-
-interface FormTemplatePageProps {
-  params: {
-    id: string
-  }
-}
-
-async function getFormTemplate(id: string) {
-  const template = await prisma.formTemplate.findUnique({
-    where: { id },
-    include: {
-      department: true,
-      phase: {
-        include: {
-          workflow: true,
-        },
-      },
-    },
-  })
-
-  if (!template) {
-    notFound()
-  }
-
-  return template
-}
 
 async function getWorkflowsAndDepartments() {
   const [workflows, departments] = await Promise.all([
@@ -52,21 +25,18 @@ async function getWorkflowsAndDepartments() {
 }
 
 /**
- * Form template edit page that allows users to modify existing templates
+ * Form template creation page that provides an interface for building new form templates
  */
-export default async function FormTemplatePage({ params }: FormTemplatePageProps) {
+export default async function NewFormTemplatePage() {
   const session = await getServerSession(authOptions)
 
   if (!session) {
     redirect("/auth/signin")
   }
 
-  const [template, { workflows, departments }] = await Promise.all([
-    getFormTemplate(params.id),
-    getWorkflowsAndDepartments(),
-  ])
+  const { workflows, departments } = await getWorkflowsAndDepartments()
 
-  async function updateFormTemplate(updatedTemplate: any) {
+  async function createFormTemplate(template: any) {
     "use server"
 
     const session = await getServerSession(authOptions)
@@ -74,10 +44,10 @@ export default async function FormTemplatePage({ params }: FormTemplatePageProps
       throw new Error("Unauthorized")
     }
 
-    await prisma.formTemplate.update({
-      where: { id: params.id },
+    await prisma.formTemplate.create({
       data: {
-        ...updatedTemplate,
+        ...template,
+        createdById: session.user.id,
         updatedById: session.user.id,
       },
     })
@@ -88,17 +58,16 @@ export default async function FormTemplatePage({ params }: FormTemplatePageProps
   return (
     <div className="container py-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Edit Form Template</h1>
+        <h1 className="text-3xl font-bold">Create Form Template</h1>
         <p className="text-muted-foreground">
-          Modify the form template settings and layout
+          Design a new form template for your workflow
         </p>
       </div>
 
       <FormBuilder
-        initialTemplate={template}
         workflows={workflows}
         departments={departments}
-        onSave={updateFormTemplate}
+        onSave={createFormTemplate}
       />
     </div>
   )

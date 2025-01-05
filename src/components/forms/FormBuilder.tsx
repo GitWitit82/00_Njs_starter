@@ -1,5 +1,7 @@
+"use client"
+
 import { useState } from "react"
-import { FormTemplate } from "@prisma/client"
+import { FormTemplate, Workflow, Department } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FormField } from "./FormField"
@@ -10,6 +12,8 @@ import { cn } from "@/lib/utils"
 
 interface FormBuilderProps {
   initialTemplate?: Partial<FormTemplate>
+  workflows: (Workflow & { phases: Phase[] })[]
+  departments: Department[]
   onSave: (template: Partial<FormTemplate>) => Promise<void>
   className?: string
 }
@@ -18,7 +22,13 @@ interface FormBuilderProps {
  * FormBuilder component for creating and editing form templates
  * Supports multiple form types, layouts, and custom dynamic forms
  */
-export function FormBuilder({ initialTemplate, onSave, className }: FormBuilderProps) {
+export function FormBuilder({
+  initialTemplate,
+  workflows,
+  departments,
+  onSave,
+  className,
+}: FormBuilderProps) {
   const { toast } = useToast()
   const [template, setTemplate] = useState<Partial<FormTemplate>>(
     initialTemplate || {
@@ -36,6 +46,9 @@ export function FormBuilder({ initialTemplate, onSave, className }: FormBuilderP
     }
   )
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit")
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("")
+
+  const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId)
 
   /**
    * Adds a new field to the form template
@@ -77,6 +90,15 @@ export function FormBuilder({ initialTemplate, onSave, className }: FormBuilderP
    * Handles saving the form template
    */
   const handleSave = async () => {
+    if (!template.phaseId) {
+      toast({
+        title: "Error",
+        description: "Please select a workflow phase",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       await onSave(template)
       toast({
@@ -141,6 +163,45 @@ export function FormBuilder({ initialTemplate, onSave, className }: FormBuilderP
                 ]}
                 onChange={(value) => setTemplate((prev) => ({ ...prev, type: value }))}
               />
+              <FormField
+                type="select"
+                label="Department"
+                value={template.departmentId}
+                options={departments.map((dept) => ({
+                  label: dept.name,
+                  value: dept.id,
+                }))}
+                onChange={(value) =>
+                  setTemplate((prev) => ({ ...prev, departmentId: value }))
+                }
+              />
+              <FormField
+                type="select"
+                label="Workflow"
+                value={selectedWorkflowId}
+                options={workflows.map((workflow) => ({
+                  label: workflow.name,
+                  value: workflow.id,
+                }))}
+                onChange={(value) => {
+                  setSelectedWorkflowId(value)
+                  setTemplate((prev) => ({ ...prev, phaseId: undefined }))
+                }}
+              />
+              {selectedWorkflow && (
+                <FormField
+                  type="select"
+                  label="Phase"
+                  value={template.phaseId}
+                  options={selectedWorkflow.phases.map((phase) => ({
+                    label: phase.name,
+                    value: phase.id,
+                  }))}
+                  onChange={(value) =>
+                    setTemplate((prev) => ({ ...prev, phaseId: value }))
+                  }
+                />
+              )}
             </div>
 
             {/* Fields and Sections */}

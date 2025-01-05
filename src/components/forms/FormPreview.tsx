@@ -1,3 +1,5 @@
+"use client"
+
 import { useState } from "react"
 import { FormTemplate } from "@prisma/client"
 import { Button } from "@/components/ui/button"

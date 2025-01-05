@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { SessionProvider } from "@/components/session-provider"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { Toaster } from "@/components/ui/toaster"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,13 +43,18 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <div className="flex min-h-screen">
-              {session && <Sidebar />}
+              {session && (
+                <div className="w-64 flex-shrink-0">
+                  <Sidebar />
+                </div>
+              )}
               <main className={session ? "flex-1 px-8 py-6 bg-background" : "w-full"}>
                 {children}
               </main>
             </div>
           </ThemeProvider>
         </SessionProvider>
+        <Toaster />
       </body>
     </html>
   );
