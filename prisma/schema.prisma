@@ -50,6 +50,8 @@ model User {
   assignedTasks ProjectTask[]
   departments   Department[]    @relation("UserDepartments")
   projects      Project[]       @relation("ProjectManagers")
+  submittedForms FormResponse[] @relation("FormSubmissions")
+  reviewedForms  FormResponse[] @relation("FormReviews")
 }
 
 model VerificationToken {
@@ -164,22 +166,37 @@ model ProjectTask {
 
 // Form Management Models
 model FormTemplate {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  type        FormType      @default(FORM)
-  schema      Json         // Form structure/fields
-  order       Int          @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  phaseId     String
-  phase       Phase        @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  responses   FormResponse[]
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  type          FormType      @default(FORM)
+  departmentId  String?
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  schema        Json         // Form structure/fields
+  layout        Json?        // Optional layout configuration
+  style         Json?        // Optional styling configuration
+  metadata      Json?        // Additional metadata for custom forms
+  order         Int          @default(0)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  phaseId       String
+  phase         Phase        @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  responses     FormResponse[]
 }
 
 model FormResponse {
   id             String       @id @default(cuid())
   data           Json        // Form response data
+  metadata       Json?       // Additional metadata for responses
+  status         String      @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED
+  submittedAt    DateTime?
+  submittedById  String?
+  submittedBy    User?       @relation("FormSubmissions", fields: [submittedById], references: [id])
+  reviewedAt     DateTime?
+  reviewedById   String?
+  reviewedBy     User?       @relation("FormReviews", fields: [reviewedById], references: [id])
+  comments       String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   templateId     String
@@ -250,4 +267,18 @@ enum TaskStatus {
 enum FormType {
   CHECKLIST
   FORM
+  CUSTOM
+}
+
+enum FormFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  CHECKBOX
+  RADIO
+  SELECT
+  DATE
+  TIME
+  DATETIME
+  CUSTOM
 }
