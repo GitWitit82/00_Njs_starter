@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Phase, Priority, Task, Workflow } from "@prisma/client"
+import { useEffect, useState } from "react"
+import { Phase, Priority, Task, Workflow, Department } from "@prisma/client"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -38,12 +38,14 @@ const formSchema = z.object({
   description: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
   manHours: z.number().min(0.25, "Minimum 0.25 hours").step(0.25),
+  departmentId: z.string().optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
 
 interface TaskModalProps {
   phase: Phase & { workflow: Workflow }
+  task?: Task & { department?: Department | null }
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
@@ -51,12 +53,16 @@ interface TaskModalProps {
 
 export function TaskModal({
   phase,
+  task,
   open,
   onOpenChange,
   onSuccess,
 }: TaskModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  const isEditing = !!task
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -65,32 +71,72 @@ export function TaskModal({
       description: "",
       priority: "MEDIUM",
       manHours: 1,
+      departmentId: undefined,
     },
   })
+
+  // Reset form when task changes
+  useEffect(() => {
+    if (task) {
+      form.reset({
+        name: task.name,
+        description: task.description || "",
+        priority: task.priority,
+        manHours: task.manHours,
+        departmentId: task.departmentId || undefined,
+      })
+    } else {
+      form.reset({
+        name: "",
+        description: "",
+        priority: "MEDIUM",
+        manHours: 1,
+        departmentId: undefined,
+      })
+    }
+  }, [task, form])
+
+  // Fetch departments
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const response = await fetch("/api/departments")
+        if (!response.ok) throw new Error("Failed to fetch departments")
+        const data = await response.json()
+        setDepartments(data)
+      } catch (error) {
+        console.error("Error:", error)
+        setError("Failed to load departments")
+      }
+    }
+
+    fetchDepartments()
+  }, [])
 
   const onSubmit = async (values: FormData) => {
     try {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(
-        `/api/workflows/${phase.workflow.id}/phases/${phase.id}/tasks`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(values),
-        }
-      )
+      const url = isEditing
+        ? `/api/workflows/${phase.workflow.id}/phases/${phase.id}/tasks/${task.id}`
+        : `/api/workflows/${phase.workflow.id}/phases/${phase.id}/tasks`
 
-      if (!response.ok) throw new Error("Failed to create task")
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      })
+
+      if (!response.ok) throw new Error(isEditing ? "Failed to update task" : "Failed to create task")
 
       form.reset()
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      setError("Failed to create task")
+      setError(isEditing ? "Failed to update task" : "Failed to create task")
     } finally {
       setIsLoading(false)
     }
@@ -100,9 +146,9 @@ export function TaskModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Task</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Task" : "Create Task"}</DialogTitle>
           <DialogDescription>
-            Add a new task to the {phase.name} phase.
+            {isEditing ? "Make changes to your task." : `Add a new task to the ${phase.name} phase.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,52 +191,88 @@ export function TaskModal({
               )}
             />
 
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priority</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="manHours"
+                render={({ field: { onChange, ...field } }) => (
+                  <FormItem>
+                    <FormLabel>Man Hours</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.25"
+                        min="0.25"
+                        placeholder="Enter estimated hours"
+                        {...field}
+                        value={field.value?.toString() || ""}
+                        onChange={(e) => {
+                          const value = e.target.value === "" ? 0 : parseFloat(e.target.value)
+                          onChange(isNaN(value) ? 0 : value)
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
-              name="priority"
+              name="departmentId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Priority</FormLabel>
+                  <FormLabel>Department</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select priority" />
+                        <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: department.color }}
+                            />
+                            {department.name}
+                          </div>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="manHours"
-              render={({ field: { onChange, ...field } }) => (
-                <FormItem>
-                  <FormLabel>Man Hours</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.25"
-                      min="0.25"
-                      placeholder="Enter estimated hours"
-                      {...field}
-                      value={field.value?.toString() || ""}
-                      onChange={(e) => {
-                        const value = e.target.value === "" ? 0 : parseFloat(e.target.value)
-                        onChange(isNaN(value) ? 0 : value)
-                      }}
-                    />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -206,7 +288,7 @@ export function TaskModal({
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Task"}
+                {isLoading ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Task" : "Create Task")}
               </Button>
             </DialogFooter>
           </form>

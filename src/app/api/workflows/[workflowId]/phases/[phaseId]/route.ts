@@ -35,7 +35,10 @@ export async function GET(
         workflow: true,
         tasks: {
           orderBy: {
-            createdAt: "asc",
+            order: "asc",
+          },
+          include: {
+            department: true,
           },
         },
       },
@@ -92,7 +95,10 @@ export async function PUT(
         workflow: true,
         tasks: {
           orderBy: {
-            createdAt: "asc",
+            order: "asc",
+          },
+          include: {
+            department: true,
           },
         },
       },

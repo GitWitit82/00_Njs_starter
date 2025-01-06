@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Phase, Task, Workflow } from "@prisma/client"
+import { Phase, Task, Workflow, Department } from "@prisma/client"
 import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import { TaskModal } from "@/components/workflows/task-modal"
 
 type PhaseWithTasks = Phase & {
   workflow: Workflow
-  tasks: Task[]
+  tasks: (Task & { department: Department | null })[]
 }
 
 export default function TasksPage() {

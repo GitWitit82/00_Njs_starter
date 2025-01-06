@@ -9,6 +9,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
   manHours: z.number().min(0.25).step(0.25),
+  departmentId: z.string().optional(),
 })
 
 /**
@@ -39,6 +40,9 @@ export async function GET(
       },
       orderBy: {
         order: "asc",
+      },
+      include: {
+        department: true,
       },
     })
 
@@ -88,11 +92,25 @@ export async function POST(
 
     const nextOrder = lastTask ? lastTask.order + 1 : 0
 
+    // Check if department exists if provided
+    if (body.departmentId) {
+      const department = await db.department.findUnique({
+        where: { id: body.departmentId },
+      })
+
+      if (!department) {
+        return new NextResponse("Department not found", { status: 404 })
+      }
+    }
+
     const task = await db.workflowTask.create({
       data: {
         ...body,
         phaseId,
         order: nextOrder,
+      },
+      include: {
+        department: true,
       },
     })
 

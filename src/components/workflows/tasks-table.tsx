@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import { useState } from "react"
-import { Phase, Task, Workflow } from "@prisma/client"
+import { Phase, Task, Workflow, Department } from "@prisma/client"
 import { formatDistanceToNow } from "date-fns"
-import { Trash2 } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -19,11 +19,12 @@ import { Badge } from "@/components/ui/badge"
 
 interface TasksTableProps {
   phase: Phase & { workflow: Workflow }
-  tasks: Task[]
+  tasks: (Task & { department?: Department | null })[]
   onTaskChange: () => void
+  onEdit: (task: Task & { department?: Department | null }) => void
 }
 
-export function TasksTable({ phase, tasks, onTaskChange }: TasksTableProps) {
+export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTableProps) {
   const [error, setError] = useState<string | null>(null)
 
   const handleDelete = async (taskId: string) => {
@@ -73,15 +74,16 @@ export function TasksTable({ phase, tasks, onTaskChange }: TasksTableProps) {
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Priority</TableHead>
+            <TableHead>Department</TableHead>
             <TableHead>Man Hours</TableHead>
             <TableHead>Created</TableHead>
-            <TableHead className="w-[100px]"></TableHead>
+            <TableHead className="w-[120px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {tasks.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
+              <TableCell colSpan={7} className="h-24 text-center">
                 No tasks found. Click the button above to create one.
               </TableCell>
             </TableRow>
@@ -98,6 +100,19 @@ export function TasksTable({ phase, tasks, onTaskChange }: TasksTableProps) {
                     {task.priority}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  {task.department ? (
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: task.department.color }}
+                      />
+                      <span>{task.department.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">No department</span>
+                  )}
+                </TableCell>
                 <TableCell>{task.manHours}h</TableCell>
                 <TableCell>
                   {formatDistanceToNow(new Date(task.createdAt), {
@@ -105,13 +120,24 @@ export function TasksTable({ phase, tasks, onTaskChange }: TasksTableProps) {
                   })}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(task.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEdit(task)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">Edit task</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(task.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete task</span>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))
