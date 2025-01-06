@@ -1,26 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { FormTemplate, Workflow, Department } from "@prisma/client"
+import { FormTemplate, FormVersion, Workflow, Department } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FormField } from "./FormField"
 import { FormSection } from "./FormSection"
 import { FormPreview } from "./FormPreview"
+import { FormVersionControl } from "./FormVersionControl"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 
 interface FormBuilderProps {
-  initialTemplate?: Partial<FormTemplate>
+  initialTemplate?: Partial<FormTemplate & { versions: FormVersion[] }>
   workflows: (Workflow & { phases: Phase[] })[]
   departments: Department[]
-  onSave: (template: Partial<FormTemplate>) => Promise<void>
+  onSave: (template: Partial<FormTemplate>, version?: Partial<FormVersion>) => Promise<void>
   className?: string
 }
 
 /**
  * FormBuilder component for creating and editing form templates
- * Supports multiple form types, layouts, and custom dynamic forms
+ * Supports multiple form types, layouts, and versioning
  */
 export function FormBuilder({
   initialTemplate,
@@ -30,7 +31,7 @@ export function FormBuilder({
   className,
 }: FormBuilderProps) {
   const { toast } = useToast()
-  const [template, setTemplate] = useState<Partial<FormTemplate>>(
+  const [template, setTemplate] = useState<Partial<FormTemplate & { versions: FormVersion[] }>>(
     initialTemplate || {
       name: "",
       description: "",
@@ -43,12 +44,66 @@ export function FormBuilder({
       layout: {},
       style: {},
       metadata: {},
+      versions: [],
+      currentVersion: 1,
     }
   )
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit")
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("")
 
   const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId)
+
+  /**
+   * Handles version change from the version control component
+   */
+  const handleVersionChange = (version: FormVersion) => {
+    setTemplate((prev) => ({
+      ...prev,
+      schema: version.schema,
+      layout: version.layout,
+      style: version.style,
+      metadata: version.metadata,
+    }))
+  }
+
+  /**
+   * Creates a new version of the form template
+   */
+  const handleCreateVersion = async (changelog: string) => {
+    if (!template.id) {
+      toast({
+        title: "Error",
+        description: "Please save the template first before creating a new version",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const newVersion: Partial<FormVersion> = {
+      templateId: template.id,
+      version: (template.currentVersion || 0) + 1,
+      schema: template.schema,
+      layout: template.layout,
+      style: template.style,
+      metadata: template.metadata,
+      changelog,
+    }
+
+    try {
+      await onSave(template, newVersion)
+      setTemplate((prev) => ({
+        ...prev,
+        currentVersion: newVersion.version,
+        versions: [...(prev.versions || []), newVersion as FormVersion],
+      }))
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create new version",
+        variant: "destructive",
+      })
+    }
+  }
 
   /**
    * Adds a new field to the form template
@@ -133,6 +188,14 @@ export function FormBuilder({
         </div>
         <Button onClick={handleSave}>Save Template</Button>
       </div>
+
+      {template.id && (
+        <FormVersionControl
+          template={template as FormTemplate & { versions: FormVersion[] }}
+          onVersionChange={handleVersionChange}
+          onCreateVersion={handleCreateVersion}
+        />
+      )}
 
       <Card className="p-4">
         {activeTab === "edit" ? (
@@ -313,7 +376,7 @@ export function FormBuilder({
             </div>
           </div>
         ) : (
-          <FormPreview template={template} />
+          <FormPreview template={template as FormTemplate} />
         )}
       </Card>
     </div>

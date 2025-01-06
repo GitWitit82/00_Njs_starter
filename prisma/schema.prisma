@@ -185,6 +185,26 @@ model FormTemplate {
   phaseId       String
   phase         Phase        @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   responses     FormResponse[]
+  versions      FormVersion[] // Relation to form versions
+  currentVersion Int        @default(1)
+}
+
+model FormVersion {
+  id            String       @id @default(cuid())
+  version       Int
+  templateId    String
+  template      FormTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schema        Json        // Form structure/fields for this version
+  layout        Json?       // Layout configuration for this version
+  style         Json?       // Styling configuration for this version
+  metadata      Json?       // Additional metadata for this version
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  createdById   String
+  createdBy     User        @relation(fields: [createdById], references: [id])
+  changelog     String?     // Description of changes in this version
+  
+  @@unique([templateId, version])
 }
 
 model FormResponse {

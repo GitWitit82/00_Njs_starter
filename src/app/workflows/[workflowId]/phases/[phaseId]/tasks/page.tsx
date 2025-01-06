@@ -11,10 +11,10 @@ import { TasksTable } from "@/components/workflows/tasks-table"
 import { prisma } from "@/lib/prisma"
 
 interface WorkflowPhaseTasksPageProps {
-  params: {
+  params: Promise<{
     workflowId: string
     phaseId: string
-  }
+  }>
 }
 
 async function getPhaseWithTasks(workflowId: string, phaseId: string) {
@@ -44,9 +44,9 @@ async function getPhaseWithTasks(workflowId: string, phaseId: string) {
 export default async function WorkflowPhaseTasksPage({
   params,
 }: WorkflowPhaseTasksPageProps) {
-  // In Next.js 13+, params are already resolved, no need to await them
-  const { workflowId, phaseId } = params
-  const phase = await getPhaseWithTasks(workflowId, phaseId)
+  // Await the params object
+  const resolvedParams = await params
+  const phase = await getPhaseWithTasks(resolvedParams.workflowId, resolvedParams.phaseId)
 
   return (
     <div className="space-y-6">
@@ -61,7 +61,7 @@ export default async function WorkflowPhaseTasksPage({
 
       <Suspense fallback={<div>Loading tasks...</div>}>
         <TasksTable
-          workflowId={workflowId}
+          workflowId={resolvedParams.workflowId}
           phaseId={phase.id}
           tasks={phase.tasks as Task[]}
         />

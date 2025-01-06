@@ -7,18 +7,70 @@
 4. [Field Types](#field-types)
 5. [Layout System](#layout-system)
 6. [Styling System](#styling-system)
-7. [Integration with Projects](#integration-with-projects)
-8. [Examples](#examples)
+7. [Version Control](#version-control)
+8. [Integration with Projects](#integration-with-projects)
+9. [Examples](#examples)
 
 ## Overview
 
-The Form Builder is a flexible system for creating and managing form templates within the workflow management system. It supports various types of forms, from simple checklists to complex dynamic forms, with features like:
+The Form Builder is a flexible system for creating and managing form templates within the workflow management system. It supports:
 
 - Department-specific styling and branding
 - Auto-population of project details
 - Conditional fields and validation
 - Custom layouts and sections
+- Version control and history tracking
 - Form response tracking and approvals
+
+## Version Control
+
+### Version Management
+Forms support full version control with the following features:
+
+- Version history tracking
+- Changelog documentation
+- Version comparison
+- Version restoration
+- Active version management
+
+### Version Structure
+\`\`\`typescript
+interface FormVersion {
+  id: string;
+  version: number;
+  templateId: string;
+  schema: Json;        // Form structure/fields
+  layout?: Json;       // Layout configuration
+  style?: Json;        // Styling configuration
+  metadata?: Json;     // Additional metadata
+  isActive: boolean;
+  createdAt: DateTime;
+  createdById: string;
+  changelog?: string;  // Description of changes
+}
+\`\`\`
+
+### Creating New Versions
+When creating a new version:
+1. Save current template state
+2. Increment version number
+3. Record changelog message
+4. Track who made the changes
+5. Maintain previous versions
+
+### Version Comparison
+The system provides detailed comparison between versions:
+- Schema changes
+- Layout modifications
+- Style updates
+- Metadata differences
+
+### Version Restoration
+To restore a previous version:
+1. Select the desired version
+2. Review the changes
+3. Confirm restoration
+4. System updates current version
 
 ## Form Types
 
@@ -50,13 +102,14 @@ The Form Builder is a flexible system for creating and managing form templates w
   type: FormType;           // CHECKLIST | FORM | CUSTOM
   departmentId?: string;    // Associated department
   phaseId: string;          // Associated workflow phase
+  currentVersion: number;   // Current active version
   schema: {
     fields: Field[];        // Form fields
     sections?: Section[];   // Optional sections for grouping
     layout?: Layout;        // Optional layout configuration
   };
   layout?: Layout;          // Global layout settings
-  style?: Style;            // Styling configuration
+  style?: Style;           // Styling configuration
   metadata?: Metadata;      // Additional configuration
 }
 \`\`\`
@@ -220,6 +273,7 @@ interface FormResponse {
   reviewedBy?: User;      // Reviewer
   reviewedAt?: Date;      // Review timestamp
   comments?: string;      // Review comments
+  version: number;        // Form version used
 }
 \`\`\`
 
@@ -231,6 +285,7 @@ const printChecklistTemplate = {
   name: "Print Quality Checklist",
   type: "CHECKLIST",
   departmentId: "print-dept-id",
+  currentVersion: 1,
   schema: {
     fields: [
       {
@@ -260,66 +315,30 @@ const printChecklistTemplate = {
 }
 \`\`\`
 
-### 2. Project Specification Form
-\`\`\`typescript
-const projectSpecTemplate = {
-  name: "Project Specifications",
-  type: "FORM",
-  schema: {
-    fields: [
-      {
-        id: "projectType",
-        type: "SELECT",
-        label: "Project Type",
-        required: true,
-        options: ["Vehicle Wrap", "Signage", "Print"]
-      },
-      {
-        id: "dimensions",
-        type: "CUSTOM",
-        label: "Dimensions",
-        validation: {
-          required: true,
-          custom: (value) => validateDimensions(value)
-        }
-      }
-    ]
-  }
-}
-\`\`\`
-
 ### API Usage
 
-#### Creating a Template
+#### Version Management
 \`\`\`typescript
-const response = await fetch('/api/forms/templates', {
+// Get all versions
+const response = await fetch('/api/forms/templates/${templateId}/versions');
+
+// Get specific version
+const response = await fetch('/api/forms/templates/${templateId}/versions/${versionId}');
+
+// Create new version
+const response = await fetch('/api/forms/templates/${templateId}/versions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
   },
-  body: JSON.stringify(template)
+  body: JSON.stringify({
+    schema: updatedSchema,
+    changelog: "Updated field validation rules"
+  })
 });
-\`\`\`
 
-#### Updating a Template
-\`\`\`typescript
-const response = await fetch(\`/api/forms/templates/\${templateId}\`, {
-  method: 'PUT',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify(updates)
+// Restore version
+const response = await fetch('/api/forms/templates/${templateId}/versions/${versionId}', {
+  method: 'POST'
 });
-\`\`\`
-
-#### Getting Templates
-\`\`\`typescript
-// Get all templates
-const response = await fetch('/api/forms/templates');
-
-// Get templates by department
-const response = await fetch('/api/forms/templates?departmentId=dept-id');
-
-// Get templates by phase
-const response = await fetch('/api/forms/templates?phaseId=phase-id');
 \`\`\` 

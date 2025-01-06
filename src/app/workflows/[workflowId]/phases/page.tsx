@@ -11,9 +11,9 @@ import { PhasesTable } from "@/components/workflows/phases-table"
 import { prisma } from "@/lib/prisma"
 
 interface WorkflowPhasesPageProps {
-  params: {
+  params: Promise<{
     workflowId: string
-  }
+  }>
 }
 
 async function getWorkflowWithPhases(workflowId: string) {
@@ -43,8 +43,9 @@ async function getWorkflowWithPhases(workflowId: string) {
 export default async function WorkflowPhasesPage({
   params,
 }: WorkflowPhasesPageProps) {
-  const { workflowId } = params
-  const workflow = await getWorkflowWithPhases(workflowId)
+  // Await the params object
+  const resolvedParams = await params
+  const workflow = await getWorkflowWithPhases(resolvedParams.workflowId)
 
   return (
     <div className="space-y-6">

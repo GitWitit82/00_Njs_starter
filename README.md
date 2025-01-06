@@ -1,6 +1,6 @@
 # Workflow PMS (Project Management System)
 
-A modern project management system built with Next.js 13, featuring workflows, phases, tasks, and dynamic form management.
+A modern project management system built with Next.js 13, featuring workflows, phases, tasks, and dynamic form management with version control.
 
 ## Features
 
@@ -27,6 +27,9 @@ A modern project management system built with Next.js 13, featuring workflows, p
 - Form validation and error handling
 - Form responses tracking
 - Department-specific form templates
+- Version control and history tracking
+- Version comparison and restoration
+- Form response version tracking
 
 ### User Interface
 - Modern and responsive design with TailwindCSS
@@ -34,6 +37,7 @@ A modern project management system built with Next.js 13, featuring workflows, p
 - Loading states and error handling
 - Toast notifications for user feedback
 - Drag-and-drop functionality
+- Version comparison interface
 
 ## Tech Stack
 
@@ -54,6 +58,8 @@ A modern project management system built with Next.js 13, featuring workflows, p
 src/
 ├── app/                    # Next.js 13 app directory
 │   ├── api/               # API routes
+│   │   └── forms/         # Form management API routes
+│   │       └── templates/ # Form template and version routes
 │   ├── auth/              # Authentication pages
 │   ├── forms/             # Form management pages
 │   ├── projects/          # Project management pages
@@ -61,10 +67,16 @@ src/
 │   └── workflows/         # Workflow management pages
 ├── components/            # Reusable components
 │   ├── forms/            # Form-related components
+│   │   ├── FormBuilder.tsx       # Form builder component
+│   │   ├── FormVersionControl.tsx # Version control component
+│   │   ├── FormVersionDiff.tsx   # Version comparison component
+│   │   └── FormPreview.tsx       # Form preview component
 │   ├── projects/         # Project-related components
 │   ├── ui/               # UI components
 │   └── workflows/        # Workflow-related components
 ├── lib/                   # Utility functions and configurations
+│   ├── services/         # Service layer
+│   │   └── form-version.service.ts # Form version management
 │   ├── auth.ts           # Auth configuration
 │   ├── prisma.ts         # Prisma client
 │   └── utils.ts          # Helper functions
@@ -131,9 +143,40 @@ The application uses a PostgreSQL database with the following main models:
 - Task
 - Department
 - FormTemplate
+- FormVersion
 - FormResponse
 
 Refer to `prisma/schema.prisma` for the complete schema definition.
+
+## Form Version Control
+
+The system includes comprehensive form version control:
+
+- Version history tracking
+- Changelog documentation
+- Version comparison
+- Version restoration
+- Active version management
+- Response version tracking
+
+### Version Management API
+
+```typescript
+// Get all versions
+GET /api/forms/templates/:id/versions
+
+// Get specific version
+GET /api/forms/templates/:id/versions/:versionId
+
+// Create new version
+POST /api/forms/templates/:id/versions
+
+// Update version
+PATCH /api/forms/templates/:id/versions/:versionId
+
+// Restore version
+POST /api/forms/templates/:id/versions/:versionId/restore
+```
 
 ## Contributing
 
