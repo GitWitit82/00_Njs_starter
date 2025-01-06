@@ -1,143 +1,148 @@
-# Workflow PMS
+# Workflow PMS (Project Management System)
 
-A modern workflow and project management system built with Next.js 13, featuring role-based access control, task management, department organization, and a powerful form builder system.
+A modern project management system built with Next.js 13, featuring workflows, phases, tasks, and dynamic form management.
 
 ## Features
 
-- 🔐 Authentication with NextAuth.js
-- 👥 Role-based access control (Admin, Manager, User)
-- 📋 Workflow management with phases and tasks
-- 🎨 Department management with color coding
-- 🔄 Drag and drop task reordering
-- 📊 Task prioritization and time estimation
-- 🎯 Progress tracking and status updates
-- 🎨 Dynamic form builder system
-- 🎨 Modern UI with Tailwind CSS and Shadcn UI
+### Authentication & Authorization
+- Next-Auth integration with role-based access control
+- Protected routes and API endpoints
+- Secure session management
 
-## Form Builder System
+### Project Management
+- Create and manage projects
+- Assign project managers and team members
+- Track project progress and status
+- Link projects to workflows and phases
 
-Our form builder system provides a flexible way to create and manage forms within your workflows:
+### Workflow Management
+- Create custom workflows with multiple phases
+- Define tasks within each phase
+- Track task completion and dependencies
+- Assign tasks to team members
 
-- **Multiple Form Types**
-  - Checklists for quality control and verification
-  - Standard forms for data collection
-  - Custom dynamic forms for complex scenarios
+### Dynamic Forms
+- Create custom form templates
+- Multiple field types support (text, number, checkbox, etc.)
+- Form validation and error handling
+- Form responses tracking
+- Department-specific form templates
 
-- **Smart Features**
-  - Department-specific styling and branding
-  - Auto-population of project details
-  - Conditional fields and validation
-  - Custom layouts and sections
-  - Form response tracking and approvals
-
-- **Integration with Workflows**
-  - Forms linked to specific phases
-  - Automatic task association
-  - Progress tracking through form submissions
-  - Department-specific form templates
-
-For detailed documentation on the form builder, see [Form Builder Documentation](docs/form-builder.md).
+### User Interface
+- Modern and responsive design with TailwindCSS
+- Server and client components optimization
+- Loading states and error handling
+- Toast notifications for user feedback
+- Drag-and-drop functionality
 
 ## Tech Stack
 
 - **Framework**: Next.js 13 (App Router)
+- **Language**: TypeScript
+- **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: NextAuth.js
-- **Database**: PostgreSQL
-- **ORM**: Prisma
-- **Styling**: Tailwind CSS
-- **UI Components**: Shadcn UI
+- **Styling**: TailwindCSS
+- **Components**: Radix UI + Shadcn UI
+- **State Management**: React Server Components + Client Hooks
 - **Form Handling**: React Hook Form
 - **Validation**: Zod
-- **State Management**: React Context
-
-## Getting Started
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/workflow-pms.git
-   cd workflow-pms
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   Fill in your environment variables in the `.env` file.
-
-4. Set up the database:
-   ```bash
-   npx prisma migrate dev
-   ```
-
-5. Start the development server:
-   ```bash
-   npm run dev
-   ```
+- **Development**: ESLint + Prettier
 
 ## Project Structure
 
 ```
-workflow-pms/
-├── src/
-│   ├── app/              # Next.js app router pages
-│   │   ├── api/         # API routes
-│   │   └── forms/       # Form builder pages
-│   ├── components/       # React components
-│   │   └── forms/       # Form builder components
-│   ├── lib/             # Utility functions and configurations
-│   └── styles/          # Global styles
-├── prisma/              # Database schema and migrations
-├── docs/               # Documentation
-└── public/             # Static assets
+src/
+├── app/                    # Next.js 13 app directory
+│   ├── api/               # API routes
+│   ├── auth/              # Authentication pages
+│   ├── forms/             # Form management pages
+│   ├── projects/          # Project management pages
+│   ├── settings/          # Settings pages
+│   └── workflows/         # Workflow management pages
+├── components/            # Reusable components
+│   ├── forms/            # Form-related components
+│   ├── projects/         # Project-related components
+│   ├── ui/               # UI components
+│   └── workflows/        # Workflow-related components
+├── lib/                   # Utility functions and configurations
+│   ├── auth.ts           # Auth configuration
+│   ├── prisma.ts         # Prisma client
+│   └── utils.ts          # Helper functions
+└── middleware.ts         # Global middleware
 ```
 
-## Recent Updates
+## Getting Started
 
-- Added Form Builder System
-  - Dynamic form template creation
-  - Department-specific form styling
-  - Form response tracking
-  - Integration with workflow phases
-- Added department management functionality
-  - Create, edit, and delete departments
-  - Assign colors to departments for visual organization
-  - Associate tasks with departments
-  - View tasks by department
-- Enhanced task management
-  - Added estimated hours field (minimum 0.25 hours)
-  - Improved task reordering with drag and drop
-  - Added department selection in task creation/editing
-- Improved error handling and user feedback
-  - Clear error messages for API failures
-  - Loading states for better UX
-  - Validation feedback for form inputs
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/workflow-pms.git
+cd workflow-pms
+```
 
-## API Documentation
+2. Install dependencies:
+```bash
+npm install
+```
 
-### Form Builder API
+3. Set up environment variables:
+```bash
+cp .env.example .env
+```
 
-The form builder system provides RESTful endpoints for managing form templates and responses:
+4. Update the `.env` file with your configuration:
+```env
+DATABASE_URL="postgresql://..."
+NEXTAUTH_SECRET="your-secret"
+NEXTAUTH_URL="http://localhost:3000"
+```
 
-- **Form Templates**
-  - GET `/api/forms/templates` - List all templates
-  - POST `/api/forms/templates` - Create new template
-  - GET `/api/forms/templates/:id` - Get template details
-  - PUT `/api/forms/templates/:id` - Update template
-  - DELETE `/api/forms/templates/:id` - Delete template
+5. Run database migrations:
+```bash
+npx prisma migrate dev
+```
 
-- **Form Responses**
-  - GET `/api/forms/responses` - List form responses
-  - POST `/api/forms/responses` - Submit form response
-  - PUT `/api/forms/responses/:id` - Update response
-  - GET `/api/forms/responses/:id` - Get response details
+6. Seed the database:
+```bash
+npx prisma db seed
+```
 
-For detailed API documentation and examples, see [Form Builder Documentation](docs/form-builder.md).
+7. Start the development server:
+```bash
+npm run dev
+```
+
+## Development Guidelines
+
+- Use TypeScript for type safety
+- Follow ESLint and Prettier configurations
+- Write JSDoc comments for functions and components
+- Use semantic commit messages
+- Create feature branches for new development
+- Write tests for critical functionality
+
+## Database Schema
+
+The application uses a PostgreSQL database with the following main models:
+
+- User
+- Project
+- Workflow
+- Phase
+- Task
+- Department
+- FormTemplate
+- FormResponse
+
+Refer to `prisma/schema.prisma` for the complete schema definition.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
-MIT License - feel free to use this project for your own purposes.
+This project is licensed under the MIT License - see the LICENSE file for details.

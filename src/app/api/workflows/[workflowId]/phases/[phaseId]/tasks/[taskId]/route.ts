@@ -14,12 +14,12 @@ export async function DELETE(
   try {
     const user = await getCurrentUser()
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
       return new NextResponse("Unauthorized", { status: 403 })
     }
 
     // Check if task exists and belongs to the phase
-    const task = await db.task.findUnique({
+    const task = await db.workflowTask.findUnique({
       where: {
         id: params.taskId,
         phaseId: params.phaseId,
@@ -31,14 +31,14 @@ export async function DELETE(
     }
 
     // Delete the task
-    await db.task.delete({
+    await db.workflowTask.delete({
       where: {
         id: params.taskId,
       },
     })
 
     // Reorder remaining tasks
-    const remainingTasks = await db.task.findMany({
+    const remainingTasks = await db.workflowTask.findMany({
       where: {
         phaseId: params.phaseId,
       },
@@ -50,7 +50,7 @@ export async function DELETE(
     // Update order in a transaction
     await db.$transaction(
       remainingTasks.map((task, index) =>
-        db.task.update({
+        db.workflowTask.update({
           where: {
             id: task.id,
           },

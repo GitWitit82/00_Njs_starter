@@ -1,37 +1,10 @@
 import { Suspense } from "react"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
-import { FormTemplateList } from "@/components/forms/FormTemplateList"
 import { PlusIcon } from "lucide-react"
 import Link from "next/link"
+import FormTemplates from "./templates"
 
-async function getFormTemplates() {
-  return prisma.formTemplate.findMany({
-    include: {
-      department: true,
-      phase: true,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  })
-}
-
-/**
- * Forms page displays a list of form templates and provides options to create new templates
- */
-export default async function FormsPage() {
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    redirect("/auth/signin")
-  }
-
-  const templates = await getFormTemplates()
-
+export default function FormsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -50,7 +23,7 @@ export default async function FormsPage() {
       </div>
 
       <Suspense fallback={<div>Loading templates...</div>}>
-        <FormTemplateList templates={templates} />
+        <FormTemplates />
       </Suspense>
     </div>
   )

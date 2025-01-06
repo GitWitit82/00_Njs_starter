@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { Phase, Task, Workflow } from "@prisma/client"
 import { Plus } from "lucide-react"
 
@@ -11,12 +11,13 @@ import { TasksTable } from "@/components/workflows/tasks-table"
 import { TaskModal } from "@/components/workflows/task-modal"
 
 type PhaseWithTasks = Phase & {
-  tasks: Task[]
   workflow: Workflow
+  tasks: Task[]
 }
 
 export default function TasksPage() {
   const params = useParams()
+  const router = useRouter()
   const [phase, setPhase] = useState<PhaseWithTasks | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +26,6 @@ export default function TasksPage() {
   const fetchPhase = async () => {
     try {
       setIsLoading(true)
-      setError(null)
       const response = await fetch(
         `/api/workflows/${params.workflowId}/phases/${params.phaseId}`
       )
@@ -41,51 +41,20 @@ export default function TasksPage() {
   }
 
   useEffect(() => {
-    if (params.workflowId && params.phaseId) {
-      fetchPhase()
-    }
+    fetchPhase()
   }, [params.workflowId, params.phaseId])
 
-  const handleTaskSuccess = (task: Task) => {
+  const handleTaskSuccess = () => {
     setModalOpen(false)
     fetchPhase()
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-[450px] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold">Loading tasks...</h2>
-          <p className="text-sm text-muted-foreground">
-            Please wait while we fetch the task data.
-          </p>
-        </div>
-      </div>
-    )
+    return <div>Loading...</div>
   }
 
-  if (error) {
-    return (
-      <div className="flex h-[450px] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-destructive">Error</h2>
-          <p className="text-sm text-muted-foreground">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!phase || !phase.workflow) {
-    return (
-      <div className="flex h-[450px] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold">Not Found</h2>
-          <p className="text-sm text-muted-foreground">
-            The requested phase could not be found.
-          </p>
-        </div>
-      </div>
-    )
+  if (!phase) {
+    return <div>Phase not found</div>
   }
 
   return (
@@ -116,16 +85,20 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="mb-4 rounded-md bg-destructive/15 p-4 text-destructive">
+          {error}
+        </div>
+      )}
+
       <TasksTable
-        workflow={phase.workflow}
         phase={phase}
         tasks={phase.tasks}
         onTaskChange={fetchPhase}
       />
 
       <TaskModal
-        workflowId={phase.workflow.id}
-        phaseId={phase.id}
+        phase={phase}
         open={modalOpen}
         onOpenChange={setModalOpen}
         onSuccess={handleTaskSuccess}

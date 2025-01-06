@@ -33,12 +33,12 @@ export async function GET(
       return new NextResponse("Missing required parameters", { status: 400 })
     }
 
-    const tasks = await db.task.findMany({
+    const tasks = await db.workflowTask.findMany({
       where: {
         phaseId,
       },
       orderBy: {
-        createdAt: "asc",
+        order: "asc",
       },
     })
 
@@ -76,10 +76,23 @@ export async function POST(
     const json = await req.json()
     const body = taskSchema.parse(json)
 
-    const task = await db.task.create({
+    // Get the highest order value
+    const lastTask = await db.workflowTask.findFirst({
+      where: {
+        phaseId,
+      },
+      orderBy: {
+        order: "desc",
+      },
+    })
+
+    const nextOrder = lastTask ? lastTask.order + 1 : 0
+
+    const task = await db.workflowTask.create({
       data: {
         ...body,
         phaseId,
+        order: nextOrder,
       },
     })
 
@@ -97,7 +110,7 @@ export async function POST(
 }
 
 /**
- * PUT /api/workflows/[workflowId]/phases/[phaseId]/tasks/reorder
+ * PUT /api/workflows/[workflowId]/phases/[phaseId]/tasks
  * Reorder tasks
  */
 export async function PUT(
@@ -119,13 +132,12 @@ export async function PUT(
     }
 
     const json = await req.json()
-    const { tasks } = json
+    const { items } = json
 
-    const transaction = tasks.map((task: { id: string; order: number }) =>
-      db.task.update({
+    const transaction = items.map((task: { id: string; order: number }) =>
+      db.workflowTask.update({
         where: {
           id: task.id,
-          phaseId,
         },
         data: {
           order: task.order,
@@ -133,18 +145,9 @@ export async function PUT(
       })
     )
 
-    await db.$transaction(transaction)
+    const tasks = await db.$transaction(transaction)
 
-    const updatedTasks = await db.task.findMany({
-      where: {
-        phaseId,
-      },
-      orderBy: {
-        order: "asc",
-      },
-    })
-
-    return NextResponse.json(updatedTasks)
+    return NextResponse.json(tasks)
   } catch (error) {
     if (error instanceof Error) {
       console.error("[TASKS_REORDER]", error.message)

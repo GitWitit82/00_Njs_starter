@@ -1,5 +1,5 @@
-import { PrismaClient, Role, Priority, ProjectStatus, TaskStatus } from "@prisma/client"
-import bcrypt from "bcryptjs"
+import { PrismaClient, Role, Priority, ProjectStatus, Prisma } from "@prisma/client"
+import { hash } from "bcryptjs"
 
 const prisma = new PrismaClient()
 
@@ -16,205 +16,177 @@ async function main() {
   await prisma.user.deleteMany()
 
   // Create admin user
-  const hashedPassword = await bcrypt.hash("1234", 10)
+  const hashedPassword = await hash("1234", 12)
   const admin = await prisma.user.create({
     data: {
       name: "admin",
       email: "admin@example.com",
-      password: hashedPassword,
-      role: "ADMIN",
-      preferences: {
-        create: {
-          theme: "system",
-        },
-      },
-    },
+      role: Role.ADMIN,
+      hashedPassword: hashedPassword,
+    } as Prisma.UserUncheckedCreateInput,
   })
 
   // Create departments
-  const departments = await Promise.all([
-    prisma.department.create({
+  const engineering = await prisma.department.create({
+    data: {
+      name: "Engineering",
+      description: "Software development team",
+      color: "#2563eb", // blue-600
+    },
+  })
+
+  const design = await prisma.department.create({
+    data: {
+      name: "Design",
+      description: "UI/UX design team",
+      color: "#db2777", // pink-600
+    },
+  })
+
+  const qa = await prisma.department.create({
+    data: {
+      name: "QA",
+      description: "Quality assurance team",
+      color: "#16a34a", // green-600
+    },
+  })
+
+  // Create workflow
+  const workflow = await prisma.workflow.create({
+    data: {
+      name: "Software Development Lifecycle",
+      description: "Standard workflow for software projects",
+    },
+  })
+
+  // Create phases
+  const phases = await Promise.all([
+    prisma.phase.create({
       data: {
-        name: "Engineering",
-        description: "Software Development Team",
-        color: "#2563eb", // Blue
+        name: "Planning",
+        description: "Project planning and requirements gathering",
+        order: 1,
+        workflowId: workflow.id,
       },
     }),
-    prisma.department.create({
+    prisma.phase.create({
       data: {
         name: "Design",
-        description: "UI/UX Design Team",
-        color: "#db2777", // Pink
+        description: "UI/UX design and architecture",
+        order: 2,
+        workflowId: workflow.id,
       },
     }),
-    prisma.department.create({
+    prisma.phase.create({
       data: {
-        name: "QA",
-        description: "Quality Assurance Team",
-        color: "#16a34a", // Green
+        name: "Development",
+        description: "Implementation and coding",
+        order: 3,
+        workflowId: workflow.id,
+      },
+    }),
+    prisma.phase.create({
+      data: {
+        name: "Testing",
+        description: "Quality assurance and testing",
+        order: 4,
+        workflowId: workflow.id,
       },
     }),
   ])
 
-  // Create a sample workflow
-  const workflow = await prisma.workflow.create({
-    data: {
-      name: "Software Development Lifecycle",
-      description: "Standard workflow for software development projects",
-      phases: {
-        create: [
-          {
-            name: "Planning",
-            description: "Project planning and requirement gathering",
-            order: 1,
-            tasks: {
-              create: [
-                {
-                  name: "Requirements Gathering",
-                  description: "Collect and document project requirements",
-                  priority: Priority.HIGH,
-                  manHours: 8,
-                  order: 1,
-                  departmentId: departments[0].id, // Engineering
-                },
-                {
-                  name: "Project Planning",
-                  description: "Create project timeline and resource allocation",
-                  priority: Priority.HIGH,
-                  manHours: 4,
-                  order: 2,
-                  departmentId: departments[0].id, // Engineering
-                },
-              ],
-            },
-          },
-          {
-            name: "Design",
-            description: "UI/UX design phase",
-            order: 2,
-            tasks: {
-              create: [
-                {
-                  name: "UI Design",
-                  description: "Create user interface designs",
-                  priority: Priority.HIGH,
-                  manHours: 16,
-                  order: 1,
-                  departmentId: departments[1].id, // Design
-                },
-                {
-                  name: "Design Review",
-                  description: "Review and approve designs",
-                  priority: Priority.MEDIUM,
-                  manHours: 4,
-                  order: 2,
-                  departmentId: departments[1].id, // Design
-                },
-              ],
-            },
-          },
-          {
-            name: "Development",
-            description: "Implementation phase",
-            order: 3,
-            tasks: {
-              create: [
-                {
-                  name: "Frontend Development",
-                  description: "Implement user interface",
-                  priority: Priority.HIGH,
-                  manHours: 40,
-                  order: 1,
-                  departmentId: departments[0].id, // Engineering
-                },
-                {
-                  name: "Backend Development",
-                  description: "Implement server-side functionality",
-                  priority: Priority.HIGH,
-                  manHours: 40,
-                  order: 2,
-                  departmentId: departments[0].id, // Engineering
-                },
-              ],
-            },
-          },
-          {
-            name: "Testing",
-            description: "Quality assurance phase",
-            order: 4,
-            tasks: {
-              create: [
-                {
-                  name: "Unit Testing",
-                  description: "Execute unit tests",
-                  priority: Priority.HIGH,
-                  manHours: 16,
-                  order: 1,
-                  departmentId: departments[2].id, // QA
-                },
-                {
-                  name: "Integration Testing",
-                  description: "Execute integration tests",
-                  priority: Priority.HIGH,
-                  manHours: 16,
-                  order: 2,
-                  departmentId: departments[2].id, // QA
-                },
-              ],
-            },
-          },
-        ],
+  // Create tasks for each phase
+  for (const [index, phase] of phases.entries()) {
+    const tasks = [
+      {
+        name: "Requirements Analysis",
+        description: "Gather and analyze project requirements",
+        priority: Priority.HIGH,
+        manHours: 8,
+        order: 1,
+        departmentId: engineering.id,
       },
-    },
-  })
+      {
+        name: "Technical Design",
+        description: "Create technical design documents",
+        priority: Priority.HIGH,
+        manHours: 16,
+        order: 2,
+        departmentId: engineering.id,
+      },
+      {
+        name: "Implementation",
+        description: "Code development and implementation",
+        priority: Priority.MEDIUM,
+        manHours: 40,
+        order: 3,
+        departmentId: engineering.id,
+      },
+    ]
 
-  // Create a sample project from the workflow
+    await Promise.all(
+      tasks.map((task) =>
+        prisma.workflowTask.create({
+          data: {
+            ...task,
+            phaseId: phase.id,
+          },
+        })
+      )
+    )
+  }
+
+  // Create a sample project
   const project = await prisma.project.create({
     data: {
       name: "Website Redesign",
-      description: "Company website redesign project",
+      description: "Redesign company website with modern UI",
       status: ProjectStatus.PLANNING,
       startDate: new Date(),
       workflowId: workflow.id,
       managerId: admin.id,
+    } as Prisma.ProjectUncheckedCreateInput,
+  })
+
+  // Create project phases
+  const projectPhases = await Promise.all(
+    phases.map((phase) =>
+      prisma.projectPhase.create({
+        data: {
+          name: phase.name,
+          description: phase.description,
+          order: phase.order,
+          projectId: project.id,
+          phaseId: phase.id,
+        },
+      })
+    )
+  )
+
+  // Create project tasks
+  const workflowTasks = await prisma.workflowTask.findMany({
+    where: {
+      phaseId: phases[0].id,
     },
   })
 
-  // Get all phases from the workflow
-  const phases = await prisma.phase.findMany({
-    where: { workflowId: workflow.id },
-    include: { tasks: true },
-  })
-
-  // Create project phases and tasks from workflow phases
-  for (const phase of phases) {
-    const projectPhase = await prisma.projectPhase.create({
-      data: {
-        name: phase.name,
-        description: phase.description,
-        order: phase.order,
-        projectId: project.id,
-        phaseId: phase.id,
-      },
-    })
-
-    // Create project tasks from workflow tasks
-    for (const task of phase.tasks) {
-      await prisma.projectTask.create({
+  await Promise.all(
+    workflowTasks.map((task, index) =>
+      prisma.projectTask.create({
         data: {
           name: task.name,
           description: task.description,
           priority: task.priority,
           manHours: task.manHours,
-          order: task.order,
-          projectPhaseId: projectPhase.id,
+          order: index + 1,
+          projectPhaseId: projectPhases[0].id,
           departmentId: task.departmentId,
           workflowTaskId: task.id,
           assignedToId: admin.id,
         },
       })
-    }
-  }
+    )
+  )
 
   console.log("Seed data created successfully")
 }

@@ -43,14 +43,14 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
-  password      String?
+  hashedPassword String?
   role          Role      @default(USER)
   accounts      Account[]
   sessions      Session[]
   preferences   UserPreference?
   assignedTasks ProjectTask[]
   departments   Department[]    @relation("UserDepartments")
-  projects      Project[]       @relation("ProjectManagers")
+  managedProjects Project[]    @relation("ProjectManagers")
   submittedForms FormResponse[] @relation("FormSubmissions")
   reviewedForms  FormResponse[] @relation("FormReviews")
 }
@@ -254,22 +254,22 @@ enum ProjectStatus {
 enum PhaseStatus {
   NOT_STARTED
   IN_PROGRESS
-  COMPLETED
   ON_HOLD
+  COMPLETED
 }
 
 enum TaskStatus {
   NOT_STARTED
   IN_PROGRESS
-  COMPLETED
   ON_HOLD
-  BLOCKED
+  COMPLETED
 }
 
 enum FormType {
-  CHECKLIST
   FORM
-  CUSTOM
+  CHECKLIST
+  SURVEY
+  INSPECTION
 }
 
 enum FormFieldType {
