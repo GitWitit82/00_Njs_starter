@@ -1,10 +1,15 @@
+/**
+ * @file TasksTable Component
+ * @description Displays and manages tasks for a workflow phase
+ */
+
 "use client"
 
-import * as React from "react"
 import { useState } from "react"
-import { Phase, Task, Workflow, Department } from "@prisma/client"
+import { useRouter } from "next/navigation"
+import { Department, Task } from "@prisma/client"
+import { Plus, Pencil } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -15,49 +20,48 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { TaskModal } from "./task-modal"
 
-interface TasksTableProps {
-  phase: Phase & { workflow: Workflow }
-  tasks: (Task & { department?: Department | null })[]
-  onTaskChange: () => void
-  onEdit: (task: Task & { department?: Department | null }) => void
+interface TaskWithDepartment extends Task {
+  department: Department | null
 }
 
-export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTableProps) {
+interface TasksTableProps {
+  workflowId: string
+  phaseId: string
+  tasks: TaskWithDepartment[]
+  isLoading?: boolean
+}
+
+export function TasksTable({
+  workflowId,
+  phaseId,
+  tasks,
+  isLoading = false,
+}: TasksTableProps) {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<TaskWithDepartment | undefined>(undefined)
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm("Are you sure you want to delete this task?")) return
-
-    try {
-      const response = await fetch(
-        `/api/workflows/${phase.workflow.id}/phases/${phase.id}/tasks/${taskId}`,
-        {
-          method: "DELETE",
-        }
-      )
-
-      if (!response.ok) throw new Error("Failed to delete task")
-
-      onTaskChange()
-    } catch (error) {
-      console.error("Error:", error)
-      setError("Failed to delete task")
-    }
+  const handleTaskSuccess = () => {
+    setModalOpen(false)
+    setSelectedTask(undefined)
+    router.refresh()
   }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "HIGH":
-        return "bg-red-500"
-      case "MEDIUM":
-        return "bg-yellow-500"
-      case "LOW":
-        return "bg-green-500"
-      default:
-        return "bg-gray-500"
-    }
+  const handleEditClick = (task: TaskWithDepartment) => {
+    setSelectedTask(task)
+    setModalOpen(true)
+  }
+
+  const handleNewTask = () => {
+    setSelectedTask(undefined)
+    setModalOpen(true)
+  }
+
+  if (isLoading) {
+    return <div>Loading tasks...</div>
   }
 
   return (
@@ -68,6 +72,13 @@ export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTablePro
         </div>
       )}
 
+      <div className="flex justify-end">
+        <Button onClick={handleNewTask}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Task
+        </Button>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -77,13 +88,13 @@ export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTablePro
             <TableHead>Department</TableHead>
             <TableHead>Man Hours</TableHead>
             <TableHead>Created</TableHead>
-            <TableHead className="w-[120px]"></TableHead>
+            <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {tasks.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center">
+              <TableCell colSpan={7} className="text-center">
                 No tasks found. Click the button above to create one.
               </TableCell>
             </TableRow>
@@ -92,27 +103,8 @@ export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTablePro
               <TableRow key={task.id}>
                 <TableCell className="font-medium">{task.name}</TableCell>
                 <TableCell>{task.description}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className={`${getPriorityColor(task.priority)} text-white`}
-                  >
-                    {task.priority}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {task.department ? (
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: task.department.color }}
-                      />
-                      <span>{task.department.name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">No department</span>
-                  )}
-                </TableCell>
+                <TableCell>{task.priority}</TableCell>
+                <TableCell>{task.department?.name || "Unassigned"}</TableCell>
                 <TableCell>{task.manHours}h</TableCell>
                 <TableCell>
                   {formatDistanceToNow(new Date(task.createdAt), {
@@ -120,30 +112,30 @@ export function TasksTable({ phase, tasks, onTaskChange, onEdit }: TasksTablePro
                   })}
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(task)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      <span className="sr-only">Edit task</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(task.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete task</span>
-                    </Button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditClick(task)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <span className="sr-only">Edit task</span>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
+
+      <TaskModal
+        workflowId={workflowId}
+        phaseId={phaseId}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onSuccess={handleTaskSuccess}
+        task={selectedTask}
+      />
     </div>
   )
 } 

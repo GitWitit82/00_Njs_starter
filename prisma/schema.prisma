@@ -171,6 +171,7 @@ model FormTemplate {
   name          String
   description   String?
   type          FormType      @default(FORM)
+  priority      FormPriority  @default(STANDARD)
   departmentId  String?
   department    Department?   @relation(fields: [departmentId], references: [id])
   schema        Json         // Form structure/fields
@@ -190,7 +191,7 @@ model FormResponse {
   id             String       @id @default(cuid())
   data           Json        // Form response data
   metadata       Json?       // Additional metadata for responses
-  status         String      @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED
+  status         FormStatus  @default(DRAFT)
   submittedAt    DateTime?
   submittedById  String?
   submittedBy    User?       @relation("FormSubmissions", fields: [submittedById], references: [id])
@@ -283,4 +284,18 @@ enum FormFieldType {
   TIME
   DATETIME
   CUSTOM
+}
+
+enum FormPriority {
+  CRITICAL    // Created immediately with project
+  STANDARD    // Created when phase becomes active
+  OPTIONAL    // Created on demand
+}
+
+enum FormStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
 }

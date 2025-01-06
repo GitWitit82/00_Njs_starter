@@ -88,8 +88,8 @@ export function WorkflowsTable({
           <TableRow>
             <TableHead className="w-[40px]"></TableHead>
             <TableHead>Name</TableHead>
+            <TableHead>Description</TableHead>
             <TableHead>Phases</TableHead>
-            <TableHead>Created</TableHead>
             <TableHead className="w-[100px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -111,12 +111,8 @@ export function WorkflowsTable({
                   </Button>
                 </TableCell>
                 <TableCell className="font-medium">{workflow.name}</TableCell>
+                <TableCell className="text-muted-foreground">{workflow.description || "No description"}</TableCell>
                 <TableCell>{workflow.phases.length}</TableCell>
-                <TableCell>
-                  {formatDistanceToNow(new Date(workflow.createdAt), {
-                    addSuffix: true,
-                  })}
-                </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     <Button
@@ -168,7 +164,7 @@ export function WorkflowsTable({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => router.push(`/workflows/${workflow.id}/phases/${phase.id}`)}
+                                onClick={() => router.push(`/workflows/${workflow.id}/phases/${phase.id}/tasks`)}
                               >
                                 View Tasks
                               </Button>

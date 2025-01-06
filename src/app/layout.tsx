@@ -7,6 +7,7 @@ import { SessionProvider } from "@/components/session-provider"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { Toaster } from "@/components/ui/toaster"
+import Breadcrumbs from "@/components/ui/breadcrumbs"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +50,7 @@ export default async function RootLayout({
                 </div>
               )}
               <main className={session ? "flex-1 px-8 py-6 bg-background" : "w-full"}>
+                {session && <Breadcrumbs />}
                 {children}
               </main>
             </div>

@@ -1,35 +1,30 @@
-import { NextResponse } from "next/server"
-import { z } from "zod"
+/**
+ * @file Phase API Route Handler
+ * @description Handles API requests for workflow phases
+ */
 
-import { db } from "@/lib/db"
-import { getCurrentUser } from "@/lib/auth-utils"
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+
+import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
 
 /**
- * GET /api/workflows/[workflowId]/phases/[phaseId]
- * Get a specific phase
+ * GET handler for retrieving a specific phase with its tasks
  */
 export async function GET(
-  req: Request,
-  context: { params: { workflowId: string; phaseId: string } }
+  request: Request,
+  { params }: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
-      return new NextResponse("Unauthorized", { status: 403 })
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const params = await context.params
-    const { workflowId, phaseId } = params
-
-    if (!workflowId || !phaseId) {
-      return new NextResponse("Missing required parameters", { status: 400 })
-    }
-
-    const phase = await db.phase.findUnique({
+    const phase = await prisma.phase.findUnique({
       where: {
-        id: phaseId,
-        workflowId,
+        id: params.phaseId,
       },
       include: {
         workflow: true,
@@ -48,105 +43,72 @@ export async function GET(
       return new NextResponse("Phase not found", { status: 404 })
     }
 
+    if (phase.workflowId !== params.workflowId) {
+      return new NextResponse("Phase does not belong to workflow", { status: 400 })
+    }
+
     return NextResponse.json(phase)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[PHASE_GET]", error.message)
-    }
+    console.error("[PHASE_GET]", error)
     return new NextResponse("Internal error", { status: 500 })
   }
 }
 
 /**
- * PUT /api/workflows/[workflowId]/phases/[phaseId]
- * Update a phase
+ * PATCH handler for updating a phase
  */
-export async function PUT(
-  req: Request,
-  context: { params: { workflowId: string; phaseId: string } }
+export async function PATCH(
+  request: Request,
+  { params }: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
-      return new NextResponse("Unauthorized", { status: 403 })
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const params = await context.params
-    const { workflowId, phaseId } = params
+    const json = await request.json()
 
-    if (!workflowId || !phaseId) {
-      return new NextResponse("Missing required parameters", { status: 400 })
-    }
-
-    const json = await req.json()
-    const { name, description } = json
-
-    const phase = await db.phase.update({
+    const phase = await prisma.phase.update({
       where: {
-        id: phaseId,
-        workflowId,
+        id: params.phaseId,
       },
       data: {
-        name,
-        description,
-      },
-      include: {
-        workflow: true,
-        tasks: {
-          orderBy: {
-            order: "asc",
-          },
-          include: {
-            department: true,
-          },
-        },
+        name: json.name,
+        description: json.description,
+        order: json.order,
       },
     })
 
     return NextResponse.json(phase)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[PHASE_UPDATE]", error.message)
-    }
+    console.error("[PHASE_PATCH]", error)
     return new NextResponse("Internal error", { status: 500 })
   }
 }
 
 /**
- * DELETE /api/workflows/[workflowId]/phases/[phaseId]
- * Delete a phase
+ * DELETE handler for removing a phase
  */
 export async function DELETE(
-  req: Request,
-  context: { params: { workflowId: string; phaseId: string } }
+  request: Request,
+  { params }: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
-      return new NextResponse("Unauthorized", { status: 403 })
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const params = await context.params
-    const { workflowId, phaseId } = params
-
-    if (!workflowId || !phaseId) {
-      return new NextResponse("Missing required parameters", { status: 400 })
-    }
-
-    await db.phase.delete({
+    await prisma.phase.delete({
       where: {
-        id: phaseId,
-        workflowId,
+        id: params.phaseId,
       },
     })
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[PHASE_DELETE]", error.message)
-    }
+    console.error("[PHASE_DELETE]", error)
     return new NextResponse("Internal error", { status: 500 })
   }
 } 

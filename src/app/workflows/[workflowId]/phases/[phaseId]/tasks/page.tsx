@@ -1,108 +1,71 @@
-"use client"
+/**
+ * @file Workflow Phase Tasks Page Component
+ * @description Displays and manages tasks for a specific workflow phase
+ */
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Phase, Task, Workflow, Department } from "@prisma/client"
-import { Plus } from "lucide-react"
+import { Suspense } from "react"
+import { notFound } from "next/navigation"
+import { Task } from "@prisma/client"
 
-import { Button } from "@/components/ui/button"
-import { Breadcrumb } from "@/components/ui/breadcrumb"
 import { TasksTable } from "@/components/workflows/tasks-table"
-import { TaskModal } from "@/components/workflows/task-modal"
+import { prisma } from "@/lib/prisma"
 
-type PhaseWithTasks = Phase & {
-  workflow: Workflow
-  tasks: (Task & { department: Department | null })[]
+interface WorkflowPhaseTasksPageProps {
+  params: {
+    workflowId: string
+    phaseId: string
+  }
 }
 
-export default function TasksPage() {
-  const params = useParams()
-  const router = useRouter()
-  const [phase, setPhase] = useState<PhaseWithTasks | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
-
-  const fetchPhase = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch(
-        `/api/workflows/${params.workflowId}/phases/${params.phaseId}`
-      )
-      if (!response.ok) throw new Error("Failed to fetch phase")
-      const data = await response.json()
-      setPhase(data)
-    } catch (error) {
-      console.error("Error:", error)
-      setError("Failed to load phase")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchPhase()
-  }, [params.workflowId, params.phaseId])
-
-  const handleTaskSuccess = () => {
-    setModalOpen(false)
-    fetchPhase()
-  }
-
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
+async function getPhaseWithTasks(workflowId: string, phaseId: string) {
+  const phase = await prisma.phase.findFirst({
+    where: {
+      id: phaseId,
+      workflowId: workflowId,
+    },
+    include: {
+      workflow: true,
+      tasks: {
+        orderBy: { order: "asc" },
+        include: {
+          department: true,
+        },
+      },
+    },
+  })
 
   if (!phase) {
-    return <div>Phase not found</div>
+    notFound()
   }
 
+  return phase
+}
+
+export default async function WorkflowPhaseTasksPage({
+  params,
+}: WorkflowPhaseTasksPageProps) {
+  // In Next.js 13+, params are already resolved, no need to await them
+  const { workflowId, phaseId } = params
+  const phase = await getPhaseWithTasks(workflowId, phaseId)
+
   return (
-    <div className="container py-6">
-      <div className="mb-8">
-        <Breadcrumb
-          items={[
-            { title: "Workflows", href: "/workflows" },
-            { title: phase.workflow.name, href: `/workflows/${phase.workflow.id}` },
-            {
-              title: "Phases",
-              href: `/workflows/${phase.workflow.id}/phases`,
-            },
-            { title: phase.name },
-          ]}
-        />
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">{phase.name} - Tasks</h1>
-            <p className="text-muted-foreground">
-              Manage tasks for this phase.
-            </p>
-          </div>
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {phase.workflow.name} - {phase.name} Tasks
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Manage tasks and their associated forms for this phase.
+        </p>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-md bg-destructive/15 p-4 text-destructive">
-          {error}
-        </div>
-      )}
-
-      <TasksTable
-        phase={phase}
-        tasks={phase.tasks}
-        onTaskChange={fetchPhase}
-      />
-
-      <TaskModal
-        phase={phase}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        onSuccess={handleTaskSuccess}
-      />
+      <Suspense fallback={<div>Loading tasks...</div>}>
+        <TasksTable
+          workflowId={workflowId}
+          phaseId={phase.id}
+          tasks={phase.tasks as Task[]}
+        />
+      </Suspense>
     </div>
   )
 } 

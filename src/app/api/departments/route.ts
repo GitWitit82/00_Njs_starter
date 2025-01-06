@@ -1,26 +1,27 @@
+/**
+ * @file Departments API Route
+ * @description Handles API requests for departments
+ */
+
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { z } from "zod"
 
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
 
-const departmentSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  color: z.string().regex(/^#[0-9A-F]{6}$/i, "Must be a valid hex color"),
-})
-
+/**
+ * GET handler for retrieving all departments
+ */
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const departments = await db.department.findMany({
+    const departments = await prisma.department.findMany({
       orderBy: {
-        createdAt: "desc",
+        name: "asc",
       },
     })
 
@@ -31,52 +32,30 @@ export async function GET() {
   }
 }
 
+/**
+ * POST handler for creating a new department
+ */
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
     const json = await request.json()
-    const body = departmentSchema.parse(json)
+    const { name, description, color } = json
 
-    // Check if department with same name already exists
-    const existingDepartment = await db.department.findFirst({
-      where: {
-        name: body.name,
-      },
-    })
-
-    if (existingDepartment) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "A department with this name already exists",
-        }),
-        { status: 400 }
-      )
-    }
-
-    const department = await db.department.create({
+    const department = await prisma.department.create({
       data: {
-        name: body.name,
-        description: body.description,
-        color: body.color,
+        name,
+        description,
+        color,
       },
     })
 
     return NextResponse.json(department)
   } catch (error) {
     console.error("[DEPARTMENTS_POST]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
-    }
     return new NextResponse("Internal error", { status: 500 })
   }
 } 
