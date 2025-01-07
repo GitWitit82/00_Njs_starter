@@ -1,384 +1,419 @@
 "use client"
 
-import { useState } from "react"
-import { FormTemplate, FormVersion, Workflow, Department } from "@prisma/client"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { formTemplateSchema } from "@/lib/validations/form"
+import { FormVersionControl } from "./FormVersionControl"
 import { FormField } from "./FormField"
 import { FormSection } from "./FormSection"
 import { FormPreview } from "./FormPreview"
-import { FormVersionControl } from "./FormVersionControl"
-import { useToast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
-
-interface FormBuilderProps {
-  initialTemplate?: Partial<FormTemplate & { versions: FormVersion[] }>
-  workflows: (Workflow & { phases: Phase[] })[]
-  departments: Department[]
-  onSave: (template: Partial<FormTemplate>, version?: Partial<FormVersion>) => Promise<void>
-  className?: string
-}
 
 /**
- * FormBuilder component for creating and editing form templates
- * Supports multiple form types, layouts, and versioning
+ * Form builder component for creating and editing form templates
  */
 export function FormBuilder({
-  initialTemplate,
-  workflows,
-  departments,
-  onSave,
-  className,
-}: FormBuilderProps) {
+  departments = [],
+  workflows = [],
+  initialData = null,
+}) {
+  const router = useRouter()
   const { toast } = useToast()
-  const [template, setTemplate] = useState<Partial<FormTemplate & { versions: FormVersion[] }>>(
-    initialTemplate || {
-      name: "",
+  const [activeTab, setActiveTab] = useState("edit")
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    type: "FORM",
+    departmentId: "",
+    phaseId: "",
+    schema: {
+      sections: [],
+    },
+    layout: {},
+    style: {},
+    metadata: {},
+    priority: "MEDIUM",
+    order: 0,
+    isActive: true,
+    ...initialData,
+  })
+
+  // Load workflows for selected department
+  const [filteredWorkflows, setFilteredWorkflows] = useState([])
+  useEffect(() => {
+    if (formData.departmentId) {
+      setFilteredWorkflows(
+        workflows.filter((w) => w.departmentId === formData.departmentId)
+      )
+    } else {
+      setFilteredWorkflows([])
+    }
+  }, [formData.departmentId, workflows])
+
+  // Load phases for selected workflow
+  const [phases, setPhases] = useState([])
+  useEffect(() => {
+    if (formData.workflowId) {
+      const workflow = workflows.find((w) => w.id === formData.workflowId)
+      setPhases(workflow?.phases || [])
+    } else {
+      setPhases([])
+    }
+  }, [formData.workflowId, workflows])
+
+  /**
+   * Handle form field changes
+   */
+  const handleChange = (field: string, value: any) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  /**
+   * Handles section management within the form builder
+   */
+  const handleAddSection = () => {
+    const newSection = {
+      id: crypto.randomUUID(),
+      title: "New Section",
       description: "",
-      type: "FORM",
-      schema: {
-        fields: [],
-        sections: [],
-        layout: { type: "default" },
-      },
-      layout: {},
-      style: {},
-      metadata: {},
-      versions: [],
-      currentVersion: 1,
+      fields: [],
     }
-  )
-  const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit")
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("")
-
-  const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId)
-
-  /**
-   * Handles version change from the version control component
-   */
-  const handleVersionChange = (version: FormVersion) => {
-    setTemplate((prev) => ({
-      ...prev,
-      schema: version.schema,
-      layout: version.layout,
-      style: version.style,
-      metadata: version.metadata,
-    }))
-  }
-
-  /**
-   * Creates a new version of the form template
-   */
-  const handleCreateVersion = async (changelog: string) => {
-    if (!template.id) {
-      toast({
-        title: "Error",
-        description: "Please save the template first before creating a new version",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const newVersion: Partial<FormVersion> = {
-      templateId: template.id,
-      version: (template.currentVersion || 0) + 1,
-      schema: template.schema,
-      layout: template.layout,
-      style: template.style,
-      metadata: template.metadata,
-      changelog,
-    }
-
-    try {
-      await onSave(template, newVersion)
-      setTemplate((prev) => ({
-        ...prev,
-        currentVersion: newVersion.version,
-        versions: [...(prev.versions || []), newVersion as FormVersion],
-      }))
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create new version",
-        variant: "destructive",
-      })
-    }
-  }
-
-  /**
-   * Adds a new field to the form template
-   */
-  const handleAddField = (field: any) => {
-    setTemplate((prev) => ({
+    setFormData((prev) => ({
       ...prev,
       schema: {
         ...prev.schema,
-        fields: [...(prev.schema?.fields || []), field],
+        sections: [...(prev.schema?.sections || []), newSection],
       },
     }))
   }
 
   /**
-   * Adds a new section to the form template
+   * Updates a section's properties
    */
-  const handleAddSection = (section: any) => {
-    setTemplate((prev) => ({
+  const handleUpdateSection = (sectionId: string, updates: any) => {
+    setFormData((prev) => ({
       ...prev,
       schema: {
         ...prev.schema,
-        sections: [...(prev.schema?.sections || []), section],
+        sections: prev.schema?.sections?.map((section) =>
+          section.id === sectionId ? { ...section, ...updates } : section
+        ),
       },
     }))
   }
 
   /**
-   * Updates the form template layout
+   * Deletes a section from the form
    */
-  const handleUpdateLayout = (layout: any) => {
-    setTemplate((prev) => ({
+  const handleDeleteSection = (sectionId: string) => {
+    setFormData((prev) => ({
       ...prev,
-      layout,
+      schema: {
+        ...prev.schema,
+        sections: prev.schema?.sections?.filter((section) => section.id !== sectionId),
+      },
     }))
   }
 
   /**
-   * Handles saving the form template
+   * Renders a section with its fields
+   */
+  const renderSection = (section: any) => {
+    const [isExpanded, setIsExpanded] = useState(true)
+
+    return (
+      <Card key={section.id} className="p-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="flex items-center space-x-2"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              <span className="text-lg font-medium">{section.title}</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 transform transition-transform ${
+                  isExpanded ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+            <div className="space-x-2">
+              <Button variant="outline" onClick={() => handleAddField(section.id)}>
+                Add Field
+              </Button>
+              <Button variant="destructive" onClick={() => handleDeleteSection(section.id)}>
+                Delete Section
+              </Button>
+            </div>
+          </div>
+
+          {isExpanded && (
+            <div className="space-y-4">
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor={`section-${section.id}-title`}>Title</Label>
+                  <Input
+                    id={`section-${section.id}-title`}
+                    value={section.title}
+                    onChange={(e) =>
+                      handleUpdateSection(section.id, { title: e.target.value })
+                    }
+                    placeholder="Enter section title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`section-${section.id}-description`}>
+                    Description
+                  </Label>
+                  <Textarea
+                    id={`section-${section.id}-description`}
+                    value={section.description}
+                    onChange={(e) =>
+                      handleUpdateSection(section.id, { description: e.target.value })
+                    }
+                    placeholder="Enter section description"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {section.fields.map((field: any) => (
+                  <FormField
+                    key={field.id}
+                    field={field}
+                    onUpdate={(updates) => handleUpdateField(section.id, field.id, updates)}
+                    onDelete={() => handleDeleteField(section.id, field.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    )
+  }
+
+  /**
+   * Save the form template
    */
   const handleSave = async () => {
-    if (!template.phaseId) {
-      toast({
-        title: "Error",
-        description: "Please select a workflow phase",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
-      await onSave(template)
+      setIsLoading(true)
+
+      // Validate form data
+      const validatedData = formTemplateSchema.parse(formData)
+
+      // Send request to API
+      const response = await fetch("/api/forms/templates", {
+        method: initialData ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validatedData),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || "Failed to save form template")
+      }
+
+      const savedTemplate = await response.json()
+
       toast({
         title: "Success",
-        description: "Form template saved successfully",
+        description: `Form template ${initialData ? "updated" : "created"} successfully`,
       })
+
+      router.push(`/forms/templates/${savedTemplate.id}`)
     } catch (error) {
+      console.error("Error saving form template:", error)
       toast({
         title: "Error",
-        description: "Failed to save form template",
+        description: error.message || "Failed to save form template",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="space-x-2">
-          <Button
-            variant={activeTab === "edit" ? "default" : "outline"}
-            onClick={() => setActiveTab("edit")}
-          >
-            Edit
-          </Button>
-          <Button
-            variant={activeTab === "preview" ? "default" : "outline"}
-            onClick={() => setActiveTab("preview")}
-          >
-            Preview
-          </Button>
-        </div>
-        <Button onClick={handleSave}>Save Template</Button>
+        <h1 className="text-2xl font-bold">
+          {initialData ? "Edit Form Template" : "Create Form Template"}
+        </h1>
+        <Button onClick={handleSave} disabled={isLoading}>
+          {isLoading ? "Saving..." : "Save"}
+        </Button>
       </div>
 
-      {template.id && (
-        <FormVersionControl
-          template={template as FormTemplate & { versions: FormVersion[] }}
-          onVersionChange={handleVersionChange}
-          onCreateVersion={handleCreateVersion}
-        />
-      )}
-
-      <Card className="p-4">
-        {activeTab === "edit" ? (
-          <div className="space-y-6">
-            {/* Form Settings */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Form Settings</h3>
-              <FormField
-                type="text"
-                label="Name"
-                value={template.name}
-                onChange={(value) => setTemplate((prev) => ({ ...prev, name: value }))}
+      <Card className="p-6">
+        <div className="grid gap-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                placeholder="Enter form name"
               />
-              <FormField
-                type="textarea"
-                label="Description"
-                value={template.description}
-                onChange={(value) => setTemplate((prev) => ({ ...prev, description: value }))}
-              />
-              <FormField
-                type="select"
-                label="Type"
-                value={template.type}
-                options={[
-                  { label: "Form", value: "FORM" },
-                  { label: "Checklist", value: "CHECKLIST" },
-                  { label: "Custom", value: "CUSTOM" },
-                ]}
-                onChange={(value) => setTemplate((prev) => ({ ...prev, type: value }))}
-              />
-              <FormField
-                type="select"
-                label="Department"
-                value={template.departmentId}
-                options={departments.map((dept) => ({
-                  label: dept.name,
-                  value: dept.id,
-                }))}
-                onChange={(value) =>
-                  setTemplate((prev) => ({ ...prev, departmentId: value }))
-                }
-              />
-              <FormField
-                type="select"
-                label="Workflow"
-                value={selectedWorkflowId}
-                options={workflows.map((workflow) => ({
-                  label: workflow.name,
-                  value: workflow.id,
-                }))}
-                onChange={(value) => {
-                  setSelectedWorkflowId(value)
-                  setTemplate((prev) => ({ ...prev, phaseId: undefined }))
-                }}
-              />
-              {selectedWorkflow && (
-                <FormField
-                  type="select"
-                  label="Phase"
-                  value={template.phaseId}
-                  options={selectedWorkflow.phases.map((phase) => ({
-                    label: phase.name,
-                    value: phase.id,
-                  }))}
-                  onChange={(value) =>
-                    setTemplate((prev) => ({ ...prev, phaseId: value }))
-                  }
-                />
-              )}
             </div>
-
-            {/* Fields and Sections */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Fields and Sections</h3>
-                <div className="space-x-2">
-                  <Button variant="outline" onClick={() => handleAddField({
-                    id: crypto.randomUUID(),
-                    type: "TEXT",
-                    label: "New Field",
-                  })}>
-                    Add Field
-                  </Button>
-                  <Button variant="outline" onClick={() => handleAddSection({
-                    id: crypto.randomUUID(),
-                    title: "New Section",
-                    fields: [],
-                  })}>
-                    Add Section
-                  </Button>
-                </div>
-              </div>
-
-              {template.schema?.sections?.map((section) => (
-                <FormSection
-                  key={section.id}
-                  section={section}
-                  fields={template.schema?.fields || []}
-                  onUpdate={(updatedSection) => {
-                    setTemplate((prev) => ({
-                      ...prev,
-                      schema: {
-                        ...prev.schema,
-                        sections: prev.schema?.sections?.map((s) =>
-                          s.id === section.id ? updatedSection : s
-                        ),
-                      },
-                    }))
-                  }}
-                  onDelete={() => {
-                    setTemplate((prev) => ({
-                      ...prev,
-                      schema: {
-                        ...prev.schema,
-                        sections: prev.schema?.sections?.filter((s) => s.id !== section.id),
-                      },
-                    }))
-                  }}
-                />
-              ))}
-
-              {template.schema?.fields?.map((field) => (
-                <FormField
-                  key={field.id}
-                  {...field}
-                  onUpdate={(updatedField) => {
-                    setTemplate((prev) => ({
-                      ...prev,
-                      schema: {
-                        ...prev.schema,
-                        fields: prev.schema?.fields?.map((f) =>
-                          f.id === field.id ? updatedField : f
-                        ),
-                      },
-                    }))
-                  }}
-                  onDelete={() => {
-                    setTemplate((prev) => ({
-                      ...prev,
-                      schema: {
-                        ...prev.schema,
-                        fields: prev.schema?.fields?.filter((f) => f.id !== field.id),
-                      },
-                    }))
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Layout Settings */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Layout Settings</h3>
-              <FormField
-                type="select"
-                label="Layout Type"
-                value={template.layout?.type}
-                options={[
-                  { label: "Default", value: "default" },
-                  { label: "Sections", value: "sections" },
-                  { label: "Grid", value: "grid" },
-                  { label: "Custom", value: "custom" },
-                ]}
-                onChange={(value) => handleUpdateLayout({ ...template.layout, type: value })}
-              />
-              {template.layout?.type === "grid" && (
-                <FormField
-                  type="number"
-                  label="Columns"
-                  value={template.layout?.config?.columns}
-                  onChange={(value) =>
-                    handleUpdateLayout({
-                      ...template.layout,
-                      config: { ...template.layout?.config, columns: parseInt(value) },
-                    })
-                  }
-                />
-              )}
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => handleChange("type", value)}
+              >
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FORM">Form</SelectItem>
+                  <SelectItem value="CHECKLIST">Checklist</SelectItem>
+                  <SelectItem value="SURVEY">Survey</SelectItem>
+                  <SelectItem value="INSPECTION">Inspection</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        ) : (
-          <FormPreview template={template as FormTemplate} />
-        )}
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleChange("description", e.target.value)}
+              placeholder="Enter form description"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="department">Department</Label>
+              <Select
+                value={formData.departmentId}
+                onValueChange={(value) => handleChange("departmentId", value)}
+              >
+                <SelectTrigger id="department">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="workflow">Workflow</Label>
+              <Select
+                value={formData.workflowId}
+                onValueChange={(value) => handleChange("workflowId", value)}
+                disabled={!formData.departmentId}
+              >
+                <SelectTrigger id="workflow">
+                  <SelectValue placeholder="Select workflow" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredWorkflows.map((workflow) => (
+                    <SelectItem key={workflow.id} value={workflow.id}>
+                      {workflow.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="phase">Phase</Label>
+              <Select
+                value={formData.phaseId}
+                onValueChange={(value) => handleChange("phaseId", value)}
+                disabled={!formData.workflowId}
+              >
+                <SelectTrigger id="phase">
+                  <SelectValue placeholder="Select phase" />
+                </SelectTrigger>
+                <SelectContent>
+                  {phases.map((phase) => (
+                    <SelectItem key={phase.id} value={phase.id}>
+                      {phase.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="priority">Priority</Label>
+              <Select
+                value={formData.priority}
+                onValueChange={(value) => handleChange("priority", value)}
+              >
+                <SelectTrigger id="priority">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
       </Card>
+
+      {initialData && <FormVersionControl templateId={initialData.id} />}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="edit">Edit</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
+        <TabsContent value="edit" className="space-y-4">
+          <div className="space-y-4">
+            <Button onClick={handleAddSection}>Add Section</Button>
+            {formData.schema?.sections?.map(renderSection)}
+          </div>
+        </TabsContent>
+        <TabsContent value="preview">
+          <FormPreview
+            schema={formData.schema}
+            layout={formData.layout}
+            style={formData.style}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 

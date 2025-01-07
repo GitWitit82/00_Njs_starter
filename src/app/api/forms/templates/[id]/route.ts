@@ -132,44 +132,75 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    // Check if template exists
-    const template = await db.formTemplate.findUnique({
-      where: { id: params.id },
-      include: {
-        responses: true,
-      },
-    })
-
-    if (!template) {
-      return new NextResponse("Template not found", { status: 404 })
-    }
-
-    // Check if template has any responses
-    if (template.responses.length > 0) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "Cannot delete template with existing responses",
-        }),
+    // Validate template ID
+    const templateId = params?.id
+    if (!templateId || typeof templateId !== 'string') {
+      return NextResponse.json(
+        { error: "Invalid template ID" },
         { status: 400 }
       )
     }
 
-    await db.formTemplate.delete({
-      where: { id: params.id },
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
+      return NextResponse.json(
+        { error: "Insufficient permissions" },
+        { status: 403 }
+      )
+    }
+
+    // Check if template exists
+    const template = await db.formTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        responses: true,
+        versions: true,
+      },
     })
 
-    return new NextResponse(null, { status: 204 })
+    if (!template) {
+      return NextResponse.json(
+        { error: "Template not found" },
+        { status: 404 }
+      )
+    }
+
+    // Check if template has any responses
+    if (template.responses.length > 0) {
+      return NextResponse.json(
+        { error: "Cannot delete template with existing responses" },
+        { status: 400 }
+      )
+    }
+
+    // Delete all versions first
+    if (template.versions?.length > 0) {
+      await db.formVersion.deleteMany({
+        where: { templateId },
+      })
+    }
+
+    // Delete the template
+    await db.formTemplate.delete({
+      where: { id: templateId },
+    })
+
+    return NextResponse.json(
+      { message: "Template deleted successfully" },
+      { status: 200 }
+    )
   } catch (error) {
     console.error("[FORM_TEMPLATE_DELETE]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to delete template" },
+      { status: 500 }
+    )
   }
 } 

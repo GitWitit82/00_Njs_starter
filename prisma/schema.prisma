@@ -187,6 +187,7 @@ model FormTemplate {
   responses     FormResponse[]
   versions      FormVersion[] // Relation to form versions
   currentVersion Int        @default(1)
+  instances     FormInstance[] // Relation to form instances
 }
 
 model FormVersion {
@@ -207,11 +208,32 @@ model FormVersion {
   @@unique([templateId, version])
 }
 
+model FormInstance {
+  id            String       @id @default(cuid())
+  templateId    String
+  template      FormTemplate @relation(fields: [templateId], references: [id])
+  versionId     String      // The version of the template used
+  version       FormVersion @relation(fields: [versionId], references: [id])
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectTaskId String
+  projectTask   ProjectTask @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
+  status        FormInstanceStatus @default(ACTIVE)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  responses     FormResponse[]
+
+  @@unique([templateId, projectTaskId])
+}
+
 model FormResponse {
   id             String       @id @default(cuid())
+  instanceId     String      // Link to form instance
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   data           Json        // Form response data
   metadata       Json?       // Additional metadata for responses
   status         FormStatus  @default(DRAFT)
+  version        Int         // Version number when response was created
   submittedAt    DateTime?
   submittedById  String?
   submittedBy    User?       @relation("FormSubmissions", fields: [submittedById], references: [id])
@@ -219,12 +241,23 @@ model FormResponse {
   reviewedById   String?
   reviewedBy     User?       @relation("FormReviews", fields: [reviewedById], references: [id])
   comments       String?
+  history        FormResponseHistory[] // Track response changes
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
-  templateId     String
-  template       FormTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  projectTaskId  String
-  projectTask    ProjectTask  @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
+}
+
+model FormResponseHistory {
+  id             String       @id @default(cuid())
+  responseId     String
+  response       FormResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  data           Json        // Previous response data
+  metadata       Json?       // Previous metadata
+  status         FormStatus  // Previous status
+  changedAt      DateTime    @default(now())
+  changedById    String
+  changedBy      User        @relation(fields: [changedById], references: [id])
+  changeType     ChangeType  // Type of change made
+  comments       String?     // Change comments
 }
 
 model Department {
@@ -316,6 +349,21 @@ enum FormStatus {
   DRAFT
   SUBMITTED
   IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum FormInstanceStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ChangeType {
+  CREATED
+  UPDATED
+  SUBMITTED
+  REVIEWED
   APPROVED
   REJECTED
 }

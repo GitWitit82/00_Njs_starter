@@ -1,19 +1,11 @@
 "use client"
 
-import * as React from "react"
+import { useState, useEffect } from "react"
+import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -21,113 +13,151 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/components/ui/use-toast"
-import { FormTemplate, FormVersion } from "@prisma/client"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { FormTemplate } from "@prisma/client"
+
+interface Version {
+  id: string
+  version: number
+  templateId: string
+  schema: any
+  layout?: any
+  style?: any
+  metadata?: any
+  isActive: boolean
+  createdAt: Date
+  createdById: string
+  changelog?: string
+}
 
 interface FormVersionControlProps {
-  template: FormTemplate & {
-    versions: FormVersion[]
-  }
-  onVersionChange: (version: FormVersion) => void
-  onCreateVersion: (changelog: string) => Promise<void>
+  templateId: string
+  onVersionChange?: (version: Version) => void
 }
 
 /**
- * FormVersionControl component for managing form template versions
- * Allows switching between versions and creating new versions
+ * Form version control component for managing form template versions
  */
 export function FormVersionControl({
-  template,
+  templateId,
   onVersionChange,
-  onCreateVersion,
 }: FormVersionControlProps) {
   const { toast } = useToast()
-  const [isCreateOpen, setIsCreateOpen] = React.useState(false)
-  const [changelog, setChangelog] = React.useState("")
-  const [selectedVersion, setSelectedVersion] = React.useState<string>(
-    template.currentVersion.toString()
-  )
+  const [versions, setVersions] = useState<Version[]>([])
+  const [selectedVersion, setSelectedVersion] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [changelog, setChangelog] = useState("")
 
-  /**
-   * Handles version selection change
-   */
-  const handleVersionChange = (version: string) => {
-    setSelectedVersion(version)
-    const selectedVersionData = template.versions.find(
-      (v) => v.version.toString() === version
-    )
-    if (selectedVersionData) {
-      onVersionChange(selectedVersionData)
+  // Fetch versions on mount
+  useEffect(() => {
+    fetchVersions()
+  }, [templateId])
+
+  const fetchVersions = async () => {
+    try {
+      const response = await fetch(`/api/forms/templates/${templateId}/versions`)
+      if (!response.ok) throw new Error("Failed to fetch versions")
+
+      const data = await response.json()
+      setVersions(data)
+
+      // Select the current version by default
+      const template = await fetch(`/api/forms/templates/${templateId}`).then(res => res.json())
+      if (template?.currentVersion) {
+        const currentVersion = data.find((v: Version) => v.version === template.currentVersion)
+        if (currentVersion) {
+          setSelectedVersion(currentVersion.id)
+          onVersionChange?.(currentVersion)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching versions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch form versions",
+        variant: "destructive",
+      })
     }
   }
 
-  /**
-   * Handles creating a new version
-   */
-  const handleCreateVersion = async () => {
-    if (!changelog.trim()) {
-      toast({
-        title: "Error",
-        description: "Please provide a changelog message",
-        variant: "destructive",
-      })
-      return
+  const handleVersionChange = (versionId: string) => {
+    const version = versions.find((v) => v.id === versionId)
+    if (version) {
+      setSelectedVersion(versionId)
+      onVersionChange?.(version)
     }
+  }
 
+  const handleCreateVersion = async () => {
     try {
-      await onCreateVersion(changelog)
-      setIsCreateOpen(false)
+      setIsLoading(true)
+
+      const response = await fetch(`/api/forms/templates/${templateId}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changelog }),
+      })
+
+      if (!response.ok) throw new Error("Failed to create version")
+
+      const newVersion = await response.json()
+      setVersions((prev) => [...prev, newVersion])
+      setSelectedVersion(newVersion.id)
+      onVersionChange?.(newVersion)
       setChangelog("")
+      setIsDialogOpen(false)
+
       toast({
         title: "Success",
         description: "New version created successfully",
       })
     } catch (error) {
+      console.error("Error creating version:", error)
       toast({
         title: "Error",
         description: "Failed to create new version",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+        <div className="space-y-1">
           <Label>Version</Label>
           <Select value={selectedVersion} onValueChange={handleVersionChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select version" />
             </SelectTrigger>
             <SelectContent>
-              {template.versions.map((version) => (
-                <SelectItem
-                  key={version.id}
-                  value={version.version.toString()}
-                >
-                  {`v${version.version}${
-                    version.version === template.currentVersion ? " (Current)" : ""
-                  }`}
+              {versions.map((version) => (
+                <SelectItem key={version.id} value={version.id}>
+                  v{version.version} ({new Date(version.createdAt).toLocaleDateString()})
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline">Create New Version</Button>
+            <Button>Create New Version</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Version</DialogTitle>
-              <DialogDescription>
-                Create a new version of this form template. Please describe the changes
-                you are making.
-              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="changelog">Changelog</Label>
                 <Textarea
@@ -137,28 +167,22 @@ export function FormVersionControl({
                   placeholder="Describe the changes in this version..."
                 />
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancel
+              <Button
+                onClick={handleCreateVersion}
+                disabled={isLoading || !changelog.trim()}
+              >
+                {isLoading ? "Creating..." : "Create"}
               </Button>
-              <Button onClick={handleCreateVersion}>Create Version</Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Version Info */}
-      {template.versions.map((version) => (
-        version.version.toString() === selectedVersion && (
-          <div key={version.id} className="space-y-2 text-sm text-muted-foreground">
-            <p>Created: {new Date(version.createdAt).toLocaleString()}</p>
-            {version.changelog && (
-              <p>Changes: {version.changelog}</p>
-            )}
-          </div>
-        )
-      ))}
+      {selectedVersion && (
+        <div className="text-sm text-gray-500">
+          {versions.find((v) => v.id === selectedVersion)?.changelog}
+        </div>
+      )}
     </div>
   )
 } 

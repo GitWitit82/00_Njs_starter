@@ -1,105 +1,97 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
-import { prisma } from "@/lib/prisma"
+import { db } from "@/lib/db"
 import { FormBuilder } from "@/components/forms/FormBuilder"
-import { notFound } from "next/navigation"
+import { Department, FormTemplate, Workflow } from "@prisma/client"
 
-interface FormTemplatePageProps {
+interface PageProps {
   params: {
     id: string
   }
 }
 
-async function getFormTemplate(id: string) {
-  const template = await prisma.formTemplate.findUnique({
-    where: { id },
+interface WorkflowWithPhases extends Workflow {
+  phases: {
+    id: string
+    name: string
+    description: string | null
+    createdAt: Date
+    updatedAt: Date
+    order: number
+    workflowId: string
+  }[]
+}
+
+interface DepartmentData extends Omit<Department, "userId"> {
+  color: string
+}
+
+interface FormBuilderProps {
+  initialData: FormTemplate & {
+    department: Department | null
+    phase: {
+      id: string
+      name: string
+    }
+  } | null
+  departments: DepartmentData[]
+  workflows: WorkflowWithPhases[]
+}
+
+/**
+ * Edit form template page
+ */
+export default async function EditFormTemplatePage({ params }: PageProps) {
+  // Fetch form template
+  const template = await db.formTemplate.findUnique({
+    where: { id: params.id },
     include: {
       department: true,
       phase: {
-        include: {
-          workflow: true,
+        select: {
+          id: true,
+          name: true,
         },
       },
     },
   })
 
   if (!template) {
-    notFound()
+    return <div>Template not found</div>
   }
 
-  return template
-}
+  // Fetch departments
+  const departments = await db.department.findMany({
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+      color: true,
+    },
+  })
 
-async function getWorkflowsAndDepartments() {
-  const [workflows, departments] = await Promise.all([
-    prisma.workflow.findMany({
-      include: {
-        phases: true,
+  // Fetch workflows with phases
+  const workflows = await db.workflow.findMany({
+    include: {
+      phases: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          createdAt: true,
+          updatedAt: true,
+          order: true,
+          workflowId: true,
+        },
       },
-      orderBy: {
-        name: "asc",
-      },
-    }),
-    prisma.department.findMany({
-      orderBy: {
-        name: "asc",
-      },
-    }),
-  ])
-
-  return { workflows, departments }
-}
-
-/**
- * Form template edit page that allows users to modify existing templates
- */
-export default async function FormTemplatePage({ params }: FormTemplatePageProps) {
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    redirect("/auth/signin")
-  }
-
-  const [template, { workflows, departments }] = await Promise.all([
-    getFormTemplate(params.id),
-    getWorkflowsAndDepartments(),
-  ])
-
-  async function updateFormTemplate(updatedTemplate: any) {
-    "use server"
-
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      throw new Error("Unauthorized")
-    }
-
-    await prisma.formTemplate.update({
-      where: { id: params.id },
-      data: {
-        ...updatedTemplate,
-        updatedById: session.user.id,
-      },
-    })
-
-    redirect("/forms")
-  }
+    },
+  })
 
   return (
-    <div className="container py-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Edit Form Template</h1>
-        <p className="text-muted-foreground">
-          Modify the form template settings and layout
-        </p>
-      </div>
-
-      <FormBuilder
-        initialTemplate={template}
-        workflows={workflows}
-        departments={departments}
-        onSave={updateFormTemplate}
-      />
-    </div>
+    <FormBuilder
+      initialData={template}
+      departments={departments}
+      workflows={workflows}
+    />
   )
 } 

@@ -1,110 +1,137 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { z } from "zod"
+import { prisma } from "@/lib/prisma"
+import { formTemplateSchema } from "@/lib/validations/form"
 
-import { authOptions } from "@/lib/auth"
-
-const formTemplateSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  type: z.enum(["CHECKLIST", "FORM", "CUSTOM"]),
-  departmentId: z.string().optional(),
-  phaseId: z.string(),
-  schema: z.any(),
-  layout: z.any().optional(),
-  style: z.any().optional(),
-  metadata: z.any().optional(),
-  order: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-})
-
-export async function GET() {
+/**
+ * GET /api/forms/templates
+ * Get all form templates
+ */
+export async function GET(req: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const session = await getServerSession()
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const templates = await db.formTemplate.findMany({
+    const { searchParams } = new URL(req.url)
+    const departmentId = searchParams.get("departmentId")
+    const phaseId = searchParams.get("phaseId")
+
+    const templates = await prisma.formTemplate.findMany({
+      where: {
+        ...(departmentId ? { departmentId } : {}),
+        ...(phaseId ? { phaseId } : {}),
+      },
       include: {
-        department: true,
-        phase: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        phase: {
+          select: {
+            id: true,
+            name: true,
+            workflow: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        versions: {
+          orderBy: {
+            version: "desc",
+          },
+          take: 1,
+        },
       },
       orderBy: {
-        createdAt: "desc",
+        order: "asc",
       },
     })
 
     return NextResponse.json(templates)
   } catch (error) {
     console.error("[FORM_TEMPLATES_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return new NextResponse("Internal Error", { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+/**
+ * POST /api/forms/templates
+ * Create a new form template
+ */
+export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const session = await getServerSession()
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
+    const json = await req.json()
+    
+    // Validate the request body
+    const validatedData = formTemplateSchema.parse(json)
 
-    const json = await request.json()
-    const body = formTemplateSchema.parse(json)
-
-    // Check if phase exists
-    const phase = await db.phase.findUnique({
-      where: { id: body.phaseId },
+    // Get the current user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
     })
 
-    if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 })
     }
 
-    // Check if department exists if provided
-    if (body.departmentId) {
-      const department = await db.department.findUnique({
-        where: { id: body.departmentId },
+    // Create the template and its initial version
+    const template = await prisma.$transaction(async (tx) => {
+      // Create the template
+      const template = await tx.formTemplate.create({
+        data: {
+          name: validatedData.name,
+          description: validatedData.description,
+          type: validatedData.type,
+          departmentId: validatedData.departmentId,
+          phaseId: validatedData.phaseId,
+          schema: validatedData.schema,
+          layout: validatedData.layout || {},
+          style: validatedData.style || {},
+          metadata: validatedData.metadata || {},
+          priority: validatedData.priority,
+          order: validatedData.order,
+          isActive: validatedData.isActive,
+          currentVersion: 1,
+        },
       })
 
-      if (!department) {
-        return new NextResponse("Department not found", { status: 404 })
-      }
-    }
+      // Create the initial version
+      await tx.formVersion.create({
+        data: {
+          version: 1,
+          templateId: template.id,
+          schema: validatedData.schema,
+          layout: validatedData.layout || {},
+          style: validatedData.style || {},
+          metadata: validatedData.metadata || {},
+          createdById: user.id,
+          changelog: "Initial version",
+          isActive: true,
+        },
+      })
 
-    const template = await db.formTemplate.create({
-      data: {
-        name: body.name,
-        description: body.description,
-        type: body.type,
-        departmentId: body.departmentId,
-        phaseId: body.phaseId,
-        schema: body.schema,
-        layout: body.layout,
-        style: body.style,
-        metadata: body.metadata,
-        order: body.order ?? 0,
-        isActive: body.isActive ?? true,
-      },
-      include: {
-        department: true,
-        phase: true,
-      },
+      return template
     })
 
     return NextResponse.json(template)
   } catch (error) {
-    console.error("[FORM_TEMPLATES_POST]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
+    console.error("[FORM_TEMPLATE_POST]", error)
+    if (error.name === "ZodError") {
+      return new NextResponse(JSON.stringify(error.issues), { status: 422 })
     }
-    return new NextResponse("Internal error", { status: 500 })
+    return new NextResponse("Internal Error", { status: 500 })
   }
 } 

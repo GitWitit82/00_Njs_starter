@@ -22,6 +22,15 @@ export function FormTemplateListWrapper({
   }
 
   const handleDelete = async (template: FormTemplate) => {
+    if (!template?.id) {
+      toast({
+        title: "Error",
+        description: "Invalid template ID",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!confirm("Are you sure you want to delete this template?")) return
 
     try {
@@ -29,19 +38,23 @@ export function FormTemplateListWrapper({
         method: "DELETE",
       })
 
-      if (!response.ok) throw new Error("Failed to delete template")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete template")
+      }
 
       toast({
         title: "Success",
-        description: "Form template deleted successfully",
+        description: data.message || "Form template deleted successfully",
       })
 
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error:", error)
       toast({
         title: "Error",
-        description: "Failed to delete template",
+        description: error?.message || "Failed to delete template",
         variant: "destructive",
       })
     }

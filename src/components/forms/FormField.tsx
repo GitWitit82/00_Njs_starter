@@ -2,9 +2,9 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -13,346 +13,335 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Checkbox } from "@/components/ui/checkbox"
-import { cn } from "@/lib/utils"
-import { FormFieldType } from "@prisma/client"
+import { Textarea } from "@/components/ui/textarea"
 
-interface FormFieldProps {
-  id?: string
-  type?: FormFieldType | string
-  label?: string
-  required?: boolean
-  placeholder?: string
-  helpText?: string
-  options?: { label: string; value: string }[]
-  validation?: Record<string, any>
-  value?: any
-  onChange?: (value: any) => void
-  onUpdate?: (field: any) => void
-  onDelete?: () => void
-  className?: string
-  isEditing?: boolean
-}
+const FIELD_TYPES = [
+  { value: "TEXT", label: "Text" },
+  { value: "TEXTAREA", label: "Text Area" },
+  { value: "NUMBER", label: "Number" },
+  { value: "EMAIL", label: "Email" },
+  { value: "PASSWORD", label: "Password" },
+  { value: "DATE", label: "Date" },
+  { value: "TIME", label: "Time" },
+  { value: "DATETIME", label: "Date & Time" },
+  { value: "CHECKBOX", label: "Checkbox" },
+  { value: "RADIO", label: "Radio" },
+  { value: "SELECT", label: "Select" },
+  { value: "MULTISELECT", label: "Multi Select" },
+  { value: "FILE", label: "File Upload" },
+  { value: "IMAGE", label: "Image Upload" },
+  { value: "SIGNATURE", label: "Signature" },
+  { value: "CUSTOM", label: "Custom" },
+]
 
 /**
- * FormField component that handles different field types and their configurations
- * Supports both form building and form rendering modes
+ * Form field component for configuring individual form fields
  */
-export function FormField({
-  id,
-  type = "TEXT",
-  label,
-  required = false,
-  placeholder,
-  helpText,
-  options = [],
-  validation = {},
-  value,
-  onChange,
-  onUpdate,
-  onDelete,
-  className,
-  isEditing = false,
-}: FormFieldProps) {
-  const [isConfigOpen, setIsConfigOpen] = useState(false)
+export function FormField({ field, onUpdate, onDelete }) {
+  const [isExpanded, setIsExpanded] = useState(true)
 
   /**
-   * Renders the appropriate input component based on field type
+   * Add a new option to the field
    */
-  const renderInput = () => {
-    switch (type) {
+  const handleAddOption = () => {
+    const newOption = {
+      label: "New Option",
+      value: `option_${crypto.randomUUID()}`,
+    }
+
+    onUpdate({
+      ...field,
+      options: [...(field.options || []), newOption],
+    })
+  }
+
+  /**
+   * Update an option in the field
+   */
+  const handleUpdateOption = (index: number, updates: any) => {
+    onUpdate({
+      ...field,
+      options: field.options.map((option, i) =>
+        i === index ? { ...option, ...updates } : option
+      ),
+    })
+  }
+
+  /**
+   * Delete an option from the field
+   */
+  const handleDeleteOption = (index: number) => {
+    onUpdate({
+      ...field,
+      options: field.options.filter((_, i) => i !== index),
+    })
+  }
+
+  /**
+   * Render the field preview based on its type
+   */
+  const renderFieldPreview = () => {
+    switch (field.type) {
+      case "TEXT":
+      case "EMAIL":
+      case "PASSWORD":
+        return (
+          <Input
+            type={field.type.toLowerCase()}
+            placeholder={field.placeholder}
+            defaultValue={field.defaultValue}
+            disabled
+          />
+        )
       case "TEXTAREA":
         return (
           <Textarea
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-            placeholder={placeholder}
-            className="min-h-[100px]"
+            placeholder={field.placeholder}
+            defaultValue={field.defaultValue}
+            disabled
           />
         )
-
       case "NUMBER":
         return (
           <Input
             type="number"
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-            placeholder={placeholder}
-            {...validation}
+            placeholder={field.placeholder}
+            defaultValue={field.defaultValue}
+            disabled
           />
         )
-
+      case "DATE":
+      case "TIME":
+      case "DATETIME":
+        return (
+          <Input
+            type={field.type.toLowerCase()}
+            placeholder={field.placeholder}
+            defaultValue={field.defaultValue}
+            disabled
+          />
+        )
       case "CHECKBOX":
         return (
-          <Checkbox
-            id={id}
-            checked={value}
-            onCheckedChange={onChange}
-          />
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={field.defaultValue}
+              disabled
+              className="h-4 w-4"
+            />
+            <span>{field.label}</span>
+          </div>
         )
-
       case "RADIO":
         return (
           <div className="space-y-2">
-            {options.map((option) => (
-              <div key={option.value} className="flex items-center space-x-2">
+            {field.options?.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
                 <input
                   type="radio"
-                  id={`${id}-${option.value}`}
-                  name={id}
-                  value={option.value}
-                  checked={value === option.value}
-                  onChange={(e) => onChange?.(e.target.value)}
+                  checked={field.defaultValue === option.value}
+                  disabled
                   className="h-4 w-4"
                 />
-                <Label htmlFor={`${id}-${option.value}`}>{option.label}</Label>
+                <span>{option.label}</span>
               </div>
             ))}
           </div>
         )
-
       case "SELECT":
+      case "MULTISELECT":
         return (
-          <Select value={value} onValueChange={onChange}>
+          <Select disabled>
             <SelectTrigger>
-              <SelectValue placeholder={placeholder} />
+              <SelectValue placeholder={field.placeholder} />
             </SelectTrigger>
             <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
+              {field.options?.map((option, index) => (
+                <SelectItem key={index} value={option.value}>
                   {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         )
-
-      case "DATE":
-        return (
-          <Input
-            type="date"
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-          />
-        )
-
-      case "TIME":
-        return (
-          <Input
-            type="time"
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-          />
-        )
-
-      case "DATETIME":
-        return (
-          <Input
-            type="datetime-local"
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-          />
-        )
-
-      case "CUSTOM":
-        return (
-          <div className="space-y-2">
-            <Textarea
-              value={value?.content || ""}
-              onChange={(e) =>
-                onChange?.({ ...value, content: e.target.value })
-              }
-              placeholder="Custom field content"
-              className="min-h-[100px]"
-            />
-            <Input
-              type="text"
-              value={value?.format || ""}
-              onChange={(e) =>
-                onChange?.({ ...value, format: e.target.value })
-              }
-              placeholder="Custom format (e.g., regex pattern)"
-            />
-          </div>
-        )
-
       default:
-        return (
-          <Input
-            type="text"
-            id={id}
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-            placeholder={placeholder}
-            {...validation}
-          />
-        )
+        return null
     }
   }
 
-  /**
-   * Renders the field configuration panel when in editing mode
-   */
-  const renderConfig = () => {
-    if (!isEditing) return null
-
-    return (
-      <div className="space-y-4 border-t pt-4 mt-4">
+  return (
+    <Card className="p-4">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label>Field Type</Label>
-          <Select
-            value={type}
-            onValueChange={(value) =>
-              onUpdate?.({ id, type: value, label, required, placeholder, helpText, options, validation })
-            }
+          <button
+            type="button"
+            className="flex items-center space-x-2"
+            onClick={() => setIsExpanded(!isExpanded)}
           >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.values(FormFieldType).map((fieldType) => (
-                <SelectItem key={fieldType} value={fieldType}>
-                  {fieldType}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <span className="text-lg font-medium">{field.label}</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 transform transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+          <Button variant="destructive" onClick={onDelete}>
+            Delete Field
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          <Label>Label</Label>
-          <Input
-            value={label}
-            onChange={(e) =>
-              onUpdate?.({ id, type, label: e.target.value, required, placeholder, helpText, options, validation })
-            }
-            placeholder="Field label"
-          />
-        </div>
+        {isExpanded && (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor={`field-${field.id}-type`}>Type</Label>
+                <Select
+                  value={field.type}
+                  onValueChange={(value) => onUpdate({ ...field, type: value })}
+                >
+                  <SelectTrigger id={`field-${field.id}-type`}>
+                    <SelectValue placeholder="Select field type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIELD_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-        <div className="flex items-center space-x-2">
-          <Switch
-            checked={required}
-            onCheckedChange={(checked) =>
-              onUpdate?.({ id, type, label, required: checked, placeholder, helpText, options, validation })
-            }
-          />
-          <Label>Required</Label>
-        </div>
+              <div className="space-y-2">
+                <Label htmlFor={`field-${field.id}-name`}>Name</Label>
+                <Input
+                  id={`field-${field.id}-name`}
+                  value={field.name}
+                  onChange={(e) =>
+                    onUpdate({ ...field, name: e.target.value })
+                  }
+                  placeholder="Enter field name"
+                />
+              </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label>Placeholder</Label>
-          <Input
-            value={placeholder}
-            onChange={(e) =>
-              onUpdate?.({ id, type, label, required, placeholder: e.target.value, helpText, options, validation })
-            }
-            placeholder="Field placeholder"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Help Text</Label>
-          <Input
-            value={helpText}
-            onChange={(e) =>
-              onUpdate?.({ id, type, label, required, placeholder, helpText: e.target.value, options, validation })
-            }
-            placeholder="Help text"
-          />
-        </div>
-
-        {(type === "SELECT" || type === "RADIO") && (
-          <div className="space-y-2">
-            <Label>Options</Label>
             <div className="space-y-2">
-              {options.map((option, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <Input
-                    value={option.label}
-                    onChange={(e) => {
-                      const newOptions = [...options]
-                      newOptions[index] = { ...option, label: e.target.value }
-                      onUpdate?.({ id, type, label, required, placeholder, helpText, options: newOptions, validation })
-                    }}
-                    placeholder="Option label"
-                  />
-                  <Input
-                    value={option.value}
-                    onChange={(e) => {
-                      const newOptions = [...options]
-                      newOptions[index] = { ...option, value: e.target.value }
-                      onUpdate?.({ id, type, label, required, placeholder, helpText, options: newOptions, validation })
-                    }}
-                    placeholder="Option value"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      const newOptions = options.filter((_, i) => i !== index)
-                      onUpdate?.({ id, type, label, required, placeholder, helpText, options: newOptions, validation })
-                    }}
-                  >
-                    ×
+              <Label htmlFor={`field-${field.id}-label`}>Label</Label>
+              <Input
+                id={`field-${field.id}-label`}
+                value={field.label}
+                onChange={(e) =>
+                  onUpdate({ ...field, label: e.target.value })
+                }
+                placeholder="Enter field label"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`field-${field.id}-placeholder`}>
+                Placeholder
+              </Label>
+              <Input
+                id={`field-${field.id}-placeholder`}
+                value={field.placeholder}
+                onChange={(e) =>
+                  onUpdate({ ...field, placeholder: e.target.value })
+                }
+                placeholder="Enter field placeholder"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`field-${field.id}-default`}>
+                Default Value
+              </Label>
+              <Input
+                id={`field-${field.id}-default`}
+                value={field.defaultValue}
+                onChange={(e) =>
+                  onUpdate({ ...field, defaultValue: e.target.value })
+                }
+                placeholder="Enter default value"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id={`field-${field.id}-required`}
+                checked={field.validation?.required}
+                onCheckedChange={(checked) =>
+                  onUpdate({
+                    ...field,
+                    validation: {
+                      ...field.validation,
+                      required: checked,
+                    },
+                  })
+                }
+              />
+              <Label htmlFor={`field-${field.id}-required`}>Required</Label>
+            </div>
+
+            {(field.type === "SELECT" ||
+              field.type === "MULTISELECT" ||
+              field.type === "RADIO") && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>Options</Label>
+                  <Button variant="outline" onClick={handleAddOption}>
+                    Add Option
                   </Button>
                 </div>
-              ))}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const newOptions = [...options, { label: "", value: "" }]
-                  onUpdate?.({ id, type, label, required, placeholder, helpText, options: newOptions, validation })
-                }}
-              >
-                Add Option
-              </Button>
+                {field.options?.map((option, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <Input
+                      value={option.label}
+                      onChange={(e) =>
+                        handleUpdateOption(index, {
+                          ...option,
+                          label: e.target.value,
+                        })
+                      }
+                      placeholder="Option label"
+                    />
+                    <Input
+                      value={option.value}
+                      onChange={(e) =>
+                        handleUpdateOption(index, {
+                          ...option,
+                          value: e.target.value,
+                        })
+                      }
+                      placeholder="Option value"
+                    />
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleDeleteOption(index)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <Label>Preview</Label>
+              <div className="mt-2">{renderFieldPreview()}</div>
             </div>
           </div>
         )}
       </div>
-    )
-  }
-
-  return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          {label && (
-            <Label htmlFor={id}>
-              {label}
-              {required && <span className="text-red-500 ml-1">*</span>}
-            </Label>
-          )}
-          {helpText && <p className="text-sm text-gray-500">{helpText}</p>}
-        </div>
-        {isEditing && (
-          <div className="space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsConfigOpen(!isConfigOpen)}
-            >
-              Configure
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDelete}
-            >
-              Delete
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {renderInput()}
-      {isConfigOpen && renderConfig()}
-    </div>
+    </Card>
   )
 } 

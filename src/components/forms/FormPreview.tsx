@@ -1,188 +1,189 @@
 "use client"
 
 import { useState } from "react"
-import { FormTemplate } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { FormField } from "./FormField"
-import { cn } from "@/lib/utils"
-
-interface FormPreviewProps {
-  template: Partial<FormTemplate>
-  initialData?: Record<string, any>
-  onSubmit?: (data: Record<string, any>) => Promise<void>
-  className?: string
-}
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 /**
- * FormPreview component for rendering and interacting with form templates
- * Supports all field types, layouts, and custom dynamic forms
+ * Form preview component for rendering a form template
  */
-export function FormPreview({
-  template,
-  initialData = {},
-  onSubmit,
-  className,
-}: FormPreviewProps) {
-  const [formData, setFormData] = useState<Record<string, any>>(initialData)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export function FormPreview({ schema, layout, style }) {
+  const [formData, setFormData] = useState({})
 
   /**
-   * Updates form data when a field value changes
+   * Handle form field changes
    */
-  const handleFieldChange = (fieldId: string, value: any) => {
+  const handleFieldChange = (name: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
-      [fieldId]: value,
+      [name]: value,
     }))
   }
 
   /**
-   * Handles form submission
+   * Render a form field based on its type
    */
-  const handleSubmit = async () => {
-    if (!onSubmit) return
-
-    try {
-      setIsSubmitting(true)
-      await onSubmit(formData)
-    } catch (error) {
-      console.error("Form submission failed:", error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  /**
-   * Renders fields based on the template layout
-   */
-  const renderFields = () => {
-    const { schema, layout } = template
-
-    if (!schema?.fields) return null
-
-    // If using sections layout
-    if (layout?.type === "sections" && schema.sections?.length) {
-      return schema.sections.map((section) => (
-        <Card key={section.id} className="p-4 space-y-4">
-          <div className="space-y-1">
-            <h3 className="text-lg font-medium">{section.title}</h3>
-            {section.description && (
-              <p className="text-sm text-gray-500">{section.description}</p>
-            )}
-          </div>
-          <div className={getLayoutClass(layout)}>
-            {section.fields.map((fieldId) => {
-              const field = schema.fields?.find((f) => f.id === fieldId)
-              if (!field) return null
-
-              return (
-                <FormField
-                  key={fieldId}
-                  {...field}
-                  value={formData[fieldId]}
-                  onChange={(value) => handleFieldChange(fieldId, value)}
-                />
-              )
-            })}
-          </div>
-        </Card>
-      ))
-    }
-
-    // If using grid layout
-    if (layout?.type === "grid") {
-      return (
-        <div className={getLayoutClass(layout)}>
-          {schema.fields.map((field) => (
-            <FormField
-              key={field.id}
-              {...field}
-              value={formData[field.id]}
-              onChange={(value) => handleFieldChange(field.id, value)}
-            />
-          ))}
-        </div>
-      )
-    }
-
-    // Default layout
-    return (
-      <div className="space-y-4">
-        {schema.fields.map((field) => (
-          <FormField
-            key={field.id}
-            {...field}
-            value={formData[field.id]}
-            onChange={(value) => handleFieldChange(field.id, value)}
+  const renderField = (field: any) => {
+    switch (field.type) {
+      case "TEXT":
+      case "EMAIL":
+      case "PASSWORD":
+        return (
+          <Input
+            type={field.type.toLowerCase()}
+            id={field.id}
+            name={field.name}
+            value={formData[field.name] || ""}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            required={field.validation?.required}
           />
-        ))}
-      </div>
-    )
-  }
-
-  /**
-   * Gets the CSS class for the layout type
-   */
-  const getLayoutClass = (layout: any) => {
-    switch (layout?.type) {
-      case "grid":
-        return cn(
-          "grid gap-4",
-          layout.config?.columns === 2 && "grid-cols-2",
-          layout.config?.columns === 3 && "grid-cols-3",
-          layout.config?.columns === 4 && "grid-cols-4"
+        )
+      case "TEXTAREA":
+        return (
+          <Textarea
+            id={field.id}
+            name={field.name}
+            value={formData[field.name] || ""}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            required={field.validation?.required}
+          />
+        )
+      case "NUMBER":
+        return (
+          <Input
+            type="number"
+            id={field.id}
+            name={field.name}
+            value={formData[field.name] || ""}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            required={field.validation?.required}
+          />
+        )
+      case "DATE":
+      case "TIME":
+      case "DATETIME":
+        return (
+          <Input
+            type={field.type.toLowerCase()}
+            id={field.id}
+            name={field.name}
+            value={formData[field.name] || ""}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            required={field.validation?.required}
+          />
+        )
+      case "CHECKBOX":
+        return (
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id={field.id}
+              name={field.name}
+              checked={formData[field.name] || false}
+              onChange={(e) => handleFieldChange(field.name, e.target.checked)}
+              required={field.validation?.required}
+              className="h-4 w-4"
+            />
+            <Label htmlFor={field.id}>{field.label}</Label>
+          </div>
+        )
+      case "RADIO":
+        return (
+          <div className="space-y-2">
+            {field.options?.map((option: any, index: number) => (
+              <div key={index} className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  id={`${field.id}-${index}`}
+                  name={field.name}
+                  value={option.value}
+                  checked={formData[field.name] === option.value}
+                  onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                  required={field.validation?.required}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor={`${field.id}-${index}`}>{option.label}</Label>
+              </div>
+            ))}
+          </div>
+        )
+      case "SELECT":
+      case "MULTISELECT":
+        return (
+          <Select
+            value={formData[field.name] || ""}
+            onValueChange={(value) => handleFieldChange(field.name, value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={field.placeholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map((option: any, index: number) => (
+                <SelectItem key={index} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )
       default:
-        return "space-y-4"
+        return null
     }
   }
 
   /**
-   * Validates if the form can be submitted
+   * Handle form submission
    */
-  const canSubmit = () => {
-    if (!template.schema?.fields) return false
-
-    return template.schema.fields.every((field) => {
-      if (field.required) {
-        const value = formData[field.id]
-        return value !== undefined && value !== "" && value !== null
-      }
-      return true
-    })
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    console.log("Form data:", formData)
   }
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Form Header */}
-      <div className="space-y-2">
-        <h2 className="text-2xl font-bold">{template.name}</h2>
-        {template.description && (
-          <p className="text-gray-500">{template.description}</p>
-        )}
-      </div>
+    <Card className="p-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {schema.sections.map((section: any, sectionIndex: number) => (
+          <div key={section.id} className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="text-lg font-medium">{section.title}</h3>
+              {section.description && (
+                <p className="text-sm text-gray-500">{section.description}</p>
+              )}
+            </div>
 
-      {/* Form Fields */}
-      {renderFields()}
+            <div className="grid gap-4">
+              {section.fields.map((field: any, fieldIndex: number) => (
+                <div key={field.id} className="space-y-2">
+                  <Label htmlFor={field.id}>
+                    {field.label}
+                    {field.validation?.required && (
+                      <span className="text-red-500 ml-1">*</span>
+                    )}
+                  </Label>
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
 
-      {/* Form Actions */}
-      {onSubmit && (
-        <div className="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setFormData(initialData)}
-          >
-            Reset
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSubmit() || isSubmitting}
-          >
-            {isSubmitting ? "Submitting..." : "Submit"}
-          </Button>
+        <div className="flex justify-end">
+          <Button type="submit">Submit</Button>
         </div>
-      )}
-    </div>
+      </form>
+    </Card>
   )
 } 
