@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { FormBuilder } from "@/components/forms/FormBuilder"
 import { Department, FormTemplate, Workflow } from "@prisma/client"
+import { notFound } from "next/navigation"
 
 interface PageProps {
   params: {
@@ -40,58 +41,43 @@ interface FormBuilderProps {
  * Edit form template page
  */
 export default async function EditFormTemplatePage({ params }: PageProps) {
-  // Fetch form template
-  const template = await db.formTemplate.findUnique({
-    where: { id: params.id },
-    include: {
-      department: true,
-      phase: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-  })
+  const id = params.id
 
-  if (!template) {
-    return <div>Template not found</div>
+  if (!id) {
+    notFound()
   }
 
-  // Fetch departments
-  const departments = await db.department.findMany({
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      createdAt: true,
-      updatedAt: true,
-      color: true,
-    },
-  })
-
-  // Fetch workflows with phases
-  const workflows = await db.workflow.findMany({
-    include: {
-      phases: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          createdAt: true,
-          updatedAt: true,
-          order: true,
-          workflowId: true,
+  const [template, departments, workflows] = await Promise.all([
+    db.formTemplate.findUnique({
+      where: { id },
+      include: {
+        department: true,
+        phase: true,
+        workflow: true,
+      },
+    }),
+    db.department.findMany({
+      orderBy: { name: "asc" },
+    }),
+    db.workflow.findMany({
+      include: {
+        phases: {
+          orderBy: { order: "asc" },
         },
       },
-    },
-  })
+      orderBy: { name: "asc" },
+    }),
+  ])
+
+  if (!template) {
+    notFound()
+  }
 
   return (
     <FormBuilder
-      initialData={template}
       departments={departments}
       workflows={workflows}
+      initialData={template}
     />
   )
 } 

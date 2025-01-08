@@ -1,10 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -14,176 +12,174 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-/**
- * Form preview component for rendering a form template
- */
-export function FormPreview({ schema, layout, style }) {
-  const [formData, setFormData] = useState({})
+interface Field {
+  id: string
+  label: string
+  type: string
+  required: boolean
+  options?: any[]
+}
 
-  /**
-   * Handle form field changes
-   */
-  const handleFieldChange = (name: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
+interface Section {
+  id: string
+  title: string
+  description: string
+  fields: Field[]
+}
 
-  /**
-   * Render a form field based on its type
-   */
-  const renderField = (field: any) => {
+interface FormSchema {
+  sections: Section[]
+}
+
+interface FormData {
+  id?: string
+  name: string
+  description: string
+  type: string
+  departmentId: string
+  workflowId?: string
+  phaseId?: string
+  schema: FormSchema
+  layout: Record<string, any>
+  style: Record<string, any>
+  metadata: Record<string, any>
+  order: number
+  isActive: boolean
+}
+
+interface FormPreviewProps {
+  formData: FormData
+  departments?: {
+    id: string
+    name: string
+    color: string
+  }[]
+}
+
+export function FormPreview({ formData, departments = [] }: FormPreviewProps) {
+  const departmentColor = departments.find(d => d.id === formData.departmentId)?.color || "#004B93"
+
+  const renderField = (field: Field) => {
     switch (field.type) {
-      case "TEXT":
-      case "EMAIL":
-      case "PASSWORD":
+      case "text":
+      case "email":
+      case "tel":
+      case "number":
+      case "date":
+      case "time":
+      case "datetime-local":
         return (
           <Input
-            type={field.type.toLowerCase()}
-            id={field.id}
-            name={field.name}
-            value={formData[field.name] || ""}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            placeholder={field.placeholder}
-            required={field.validation?.required}
+            type={field.type}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+            required={field.required}
           />
         )
-      case "TEXTAREA":
+      case "textarea":
         return (
           <Textarea
-            id={field.id}
-            name={field.name}
-            value={formData[field.name] || ""}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            placeholder={field.placeholder}
-            required={field.validation?.required}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+            required={field.required}
           />
         )
-      case "NUMBER":
+      case "select":
         return (
-          <Input
-            type="number"
-            id={field.id}
-            name={field.name}
-            value={formData[field.name] || ""}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            placeholder={field.placeholder}
-            required={field.validation?.required}
-          />
-        )
-      case "DATE":
-      case "TIME":
-      case "DATETIME":
-        return (
-          <Input
-            type={field.type.toLowerCase()}
-            id={field.id}
-            name={field.name}
-            value={formData[field.name] || ""}
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            required={field.validation?.required}
-          />
-        )
-      case "CHECKBOX":
-        return (
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id={field.id}
-              name={field.name}
-              checked={formData[field.name] || false}
-              onChange={(e) => handleFieldChange(field.name, e.target.checked)}
-              required={field.validation?.required}
-              className="h-4 w-4"
-            />
-            <Label htmlFor={field.id}>{field.label}</Label>
-          </div>
-        )
-      case "RADIO":
-        return (
-          <div className="space-y-2">
-            {field.options?.map((option: any, index: number) => (
-              <div key={index} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  id={`${field.id}-${index}`}
-                  name={field.name}
-                  value={option.value}
-                  checked={formData[field.name] === option.value}
-                  onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                  required={field.validation?.required}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor={`${field.id}-${index}`}>{option.label}</Label>
-              </div>
-            ))}
-          </div>
-        )
-      case "SELECT":
-      case "MULTISELECT":
-        return (
-          <Select
-            value={formData[field.name] || ""}
-            onValueChange={(value) => handleFieldChange(field.name, value)}
-          >
+          <Select>
             <SelectTrigger>
-              <SelectValue placeholder={field.placeholder} />
+              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((option: any, index: number) => (
-                <SelectItem key={index} value={option.value}>
-                  {option.label}
+              {field.options?.map((option, index) => (
+                <SelectItem key={index} value={option}>
+                  {option}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+        )
+      case "checkbox":
+        return (
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              required={field.required}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <span>{field.label}</span>
+          </div>
+        )
+      case "radio":
+        return (
+          <div className="space-y-2">
+            {field.options?.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name={field.id}
+                  value={option}
+                  required={field.required}
+                  className="h-4 w-4 border-gray-300"
+                />
+                <span>{option}</span>
+              </div>
+            ))}
+          </div>
+        )
+      case "file":
+        return (
+          <Input
+            type="file"
+            required={field.required}
+            accept={field.options?.join(",")}
+          />
         )
       default:
         return null
     }
   }
 
-  /**
-   * Handle form submission
-   */
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Form data:", formData)
-  }
-
   return (
-    <Card className="p-6">
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {schema.sections.map((section: any, sectionIndex: number) => (
-          <div key={section.id} className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">{section.title}</h3>
-              {section.description && (
-                <p className="text-sm text-gray-500">{section.description}</p>
-              )}
-            </div>
+    <div className="space-y-6">
+      <div 
+        className="p-4 rounded-t-lg"
+        style={{ backgroundColor: departmentColor }}
+      >
+        <h1 className="text-2xl font-bold text-white">{formData.name}</h1>
+        {formData.description && (
+          <p className="text-gray-100 mt-1">{formData.description}</p>
+        )}
+      </div>
 
-            <div className="grid gap-4">
-              {section.fields.map((field: any, fieldIndex: number) => (
-                <div key={field.id} className="space-y-2">
-                  <Label htmlFor={field.id}>
-                    {field.label}
-                    {field.validation?.required && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
-                  </Label>
-                  {renderField(field)}
-                </div>
-              ))}
+      <form className="space-y-8">
+        {formData.schema.sections.map((section) => (
+          <Card key={section.id} className="p-6">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-medium">{section.title}</h2>
+                {section.description && (
+                  <p className="mt-1 text-sm text-gray-500">
+                    {section.description}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-6">
+                {section.fields.map((field) => (
+                  <div key={field.id} className="space-y-2">
+                    <Label htmlFor={field.id}>
+                      {field.label}
+                      {field.required && (
+                        <span className="ml-1 text-red-500">*</span>
+                      )}
+                    </Label>
+                    {renderField(field)}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          </Card>
         ))}
-
-        <div className="flex justify-end">
-          <Button type="submit">Submit</Button>
-        </div>
       </form>
-    </Card>
+    </div>
   )
 } 

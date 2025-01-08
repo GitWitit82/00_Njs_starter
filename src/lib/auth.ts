@@ -9,11 +9,14 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 24 hours
   },
   pages: {
     signIn: "/auth/login",
     error: "/auth/error",
   },
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -23,7 +26,7 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.name || !credentials?.password) {
-          return null
+          throw new Error("Invalid credentials")
         }
 
         const user = await db.user.findUnique({
@@ -33,7 +36,7 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.hashedPassword) {
-          return null
+          throw new Error("User not found")
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -42,12 +45,13 @@ export const authOptions: NextAuthOptions = {
         )
 
         if (!isPasswordValid) {
-          return null
+          throw new Error("Invalid password")
         }
 
         return {
           id: user.id,
           name: user.name,
+          email: user.email,
           role: user.role,
         }
       }
@@ -58,6 +62,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id
         session.user.name = token.name
+        session.user.email = token.email
         session.user.role = token.role
       }
 
@@ -66,10 +71,12 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.email = user.email
         token.role = user.role
       }
 
       return token
     }
-  }
+  },
+  debug: process.env.NODE_ENV === "development",
 } 

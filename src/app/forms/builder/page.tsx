@@ -1,9 +1,30 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { FormTemplateBuilder } from "@/components/forms/form-template-builder"
+import { FormBuilder } from "@/components/forms/FormBuilder"
 import { FormType } from "@prisma/client"
 import { toast } from "sonner"
+import { useEffect, useState } from "react"
+
+interface Department {
+  id: string
+  name: string
+  color: string
+}
+
+interface Phase {
+  id: string
+  name: string
+}
+
+interface Workflow {
+  id: string
+  name: string
+  description?: string | null
+  phases: Phase[]
+  createdAt: Date
+  updatedAt: Date
+}
 
 /**
  * Form Builder Page
@@ -11,48 +32,53 @@ import { toast } from "sonner"
  */
 export default function FormBuilderPage() {
   const router = useRouter()
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const handleSubmit = async (data: {
-    name: string
-    description?: string
-    type: FormType
-    schema: {
-      fields: Array<{
-        id: string
-        type: string
-        label: string
-        placeholder?: string
-        required?: boolean
-      }>
-    }
-  }) => {
-    try {
-      const response = await fetch("/api/forms/templates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      })
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch departments
+        const deptResponse = await fetch("/api/departments")
+        if (!deptResponse.ok) throw new Error("Failed to fetch departments")
+        const deptData = await deptResponse.json()
+        setDepartments(deptData)
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to create form template")
+        // Fetch workflows
+        const workflowResponse = await fetch("/api/workflows")
+        if (!workflowResponse.ok) throw new Error("Failed to fetch workflows")
+        const workflowData = await workflowResponse.json()
+        setWorkflows(workflowData)
+      } catch (error) {
+        toast.error("Failed to load required data")
+      } finally {
+        setIsLoading(false)
       }
-
-      const template = await response.json()
-      toast.success("Form template created successfully")
-      router.push(`/forms/templates/${template.id}`)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong")
     }
+
+    fetchData()
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="max-w-2xl mx-auto">
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="container mx-auto py-8">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Create Form Template</h1>
-        <FormTemplateBuilder onSubmit={handleSubmit} />
+        <FormBuilder 
+          departments={departments}
+          workflows={workflows}
+          initialData={null}
+        />
       </div>
     </div>
   )

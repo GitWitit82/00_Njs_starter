@@ -3,25 +3,58 @@ import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { FormBuilder } from "@/components/forms/FormBuilder"
+import { Workflow, Department } from "@prisma/client"
 
-async function getWorkflowsAndDepartments() {
-  const [workflows, departments] = await Promise.all([
-    prisma.workflow.findMany({
-      include: {
-        phases: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    }),
-    prisma.department.findMany({
-      orderBy: {
-        name: "asc",
-      },
-    }),
-  ])
+type WorkflowWithPhases = Workflow & {
+  phases: {
+    id: string
+    name: string
+    description: string | null
+    createdAt: Date
+    updatedAt: Date
+    order: number
+    workflowId: string
+  }[]
+}
 
-  return { workflows, departments }
+async function getWorkflowsAndDepartments(): Promise<{
+  workflows: WorkflowWithPhases[]
+  departments: Department[]
+}> {
+  try {
+    const [workflows, departments] = await Promise.all([
+      prisma.workflow.findMany({
+        include: {
+          phases: {
+            orderBy: {
+              order: 'asc',
+            },
+          },
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+      prisma.department.findMany({
+        orderBy: {
+          name: "asc",
+        },
+      }),
+    ])
+
+    if (!workflows.length) {
+      console.warn('No workflows found in the database')
+    }
+
+    if (!departments.length) {
+      console.warn('No departments found in the database')
+    }
+
+    return { workflows, departments }
+  } catch (error) {
+    console.error('Error fetching workflows and departments:', error)
+    throw new Error('Failed to fetch required data')
+  }
 }
 
 /**
@@ -31,29 +64,14 @@ export default async function NewFormTemplatePage() {
   const session = await getServerSession(authOptions)
 
   if (!session) {
-    redirect("/auth/signin")
+    redirect("/auth/login")
   }
 
   const { workflows, departments } = await getWorkflowsAndDepartments()
 
-  async function createFormTemplate(template: any) {
-    "use server"
-
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      throw new Error("Unauthorized")
-    }
-
-    await prisma.formTemplate.create({
-      data: {
-        ...template,
-        createdById: session.user.id,
-        updatedById: session.user.id,
-      },
-    })
-
-    redirect("/forms")
-  }
+  // Log the data for debugging
+  console.log('Available workflows:', workflows.length)
+  console.log('Available departments:', departments.length)
 
   return (
     <div className="container py-6 space-y-6">
@@ -67,7 +85,7 @@ export default async function NewFormTemplatePage() {
       <FormBuilder
         workflows={workflows}
         departments={departments}
-        onSave={createFormTemplate}
+        initialData={null}
       />
     </div>
   )

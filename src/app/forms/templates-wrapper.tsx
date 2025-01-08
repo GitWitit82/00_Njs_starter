@@ -38,15 +38,14 @@ export function FormTemplateListWrapper({
         method: "DELETE",
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
+        const data = await response.json()
         throw new Error(data.error || "Failed to delete template")
       }
 
       toast({
         title: "Success",
-        description: data.message || "Form template deleted successfully",
+        description: "Form template deleted successfully",
       })
 
       router.refresh()

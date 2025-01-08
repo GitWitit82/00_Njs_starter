@@ -17,13 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { StandardFormTemplate } from "./StandardFormTemplate"
-import { StandardChecklist } from "./StandardChecklist"
+import { PrintChecklistForm } from "./PrintChecklistForm"
 
 interface FormTemplateListProps {
   templates: any[]
-  onEdit?: (templateId: string) => void
-  onDelete?: (templateId: string) => void
+  onEdit?: (template: any) => void
+  onDelete?: (template: any) => void
 }
 
 /**
@@ -48,47 +47,21 @@ export function FormTemplateList({
   const renderPreview = () => {
     if (!previewTemplate) return null
 
-    if (previewTemplate.type === "CHECKLIST") {
+    // For print checklist form type
+    if (previewTemplate.name.toLowerCase().includes('print checklist') || 
+        previewTemplate.type === "CHECKLIST") {
       return (
-        <StandardChecklist
-          title={previewTemplate.name}
-          departmentColor={previewTemplate.department?.color}
-          description={previewTemplate.description}
-          tasks={previewTemplate.schema.sections[0]?.fields.map((field: any) => ({
-            id: field.id,
-            text: field.label,
-            isCompleted: false,
-          }))}
+        <PrintChecklistForm 
+          departmentColor={previewTemplate.department?.color || "#004B93"} 
         />
       )
     }
 
+    // For other form types, show a message
     return (
-      <StandardFormTemplate
-        title={previewTemplate.name}
-        departmentColor={previewTemplate.department?.color}
-        description={previewTemplate.description}
-      >
-        {previewTemplate.schema.sections.map((section: any) => (
-          <div key={section.id} className="space-y-4">
-            <h3 className="text-lg font-medium">{section.title}</h3>
-            <div className="space-y-2">
-              {section.fields.map((field: any) => (
-                <div key={field.id}>
-                  <label className="block text-sm font-medium">
-                    {field.label}
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                    disabled
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </StandardFormTemplate>
+      <div className="p-4 text-center text-gray-500">
+        Preview not available for this form type yet
+      </div>
     )
   }
 
@@ -125,14 +98,14 @@ export function FormTemplateList({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onEdit?.(template.id)}
+                    onClick={() => onEdit?.(template)}
                   >
                     Edit
                   </Button>
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => onDelete?.(template.id)}
+                    onClick={() => onDelete?.(template)}
                   >
                     Delete
                   </Button>
@@ -144,7 +117,7 @@ export function FormTemplateList({
       </Table>
 
       <Dialog open={!!previewTemplate} onOpenChange={handleClosePreview}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Form Preview</DialogTitle>
           </DialogHeader>

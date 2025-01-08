@@ -19,21 +19,40 @@ const formTemplateSchema = z.object({
   isActive: z.boolean().optional(),
 })
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
+/**
+ * GET /api/forms/templates/[id]
+ * Get a specific form template
+ */
+export async function GET(req: Request, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const session = await getServerSession()
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
+    const id = params.id
+    if (!id) {
+      return new NextResponse("Template ID is required", { status: 400 })
+    }
+
     const template = await db.formTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         department: true,
         phase: true,
+        workflow: true,
+        versions: {
+          orderBy: {
+            version: "desc",
+          },
+          take: 1,
+        },
       },
     })
 
@@ -44,163 +63,133 @@ export async function GET(
     return NextResponse.json(template)
   } catch (error) {
     console.error("[FORM_TEMPLATE_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return new NextResponse("Internal Error", { status: 500 })
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+/**
+ * PUT /api/forms/templates/[id]
+ * Update a form template
+ */
+export async function PUT(req: Request, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    const session = await getServerSession()
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 })
+    const id = params.id
+    if (!id) {
+      return new NextResponse("Template ID is required", { status: 400 })
     }
 
-    const json = await request.json()
-    const body = formTemplateSchema.parse(json)
+    // Parse request body
+    let body
+    try {
+      body = await req.json()
+    } catch (error) {
+      return new NextResponse("Invalid request body", { status: 400 })
+    }
 
     // Check if template exists
     const template = await db.formTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
     })
 
     if (!template) {
       return new NextResponse("Template not found", { status: 404 })
     }
 
-    // Check if phase exists
-    const phase = await db.phase.findUnique({
-      where: { id: body.phaseId },
+    // Get the current user
+    const user = await db.user.findUnique({
+      where: { email: session.user.email },
     })
 
-    if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 })
     }
 
-    // Check if department exists if provided
-    if (body.departmentId) {
-      const department = await db.department.findUnique({
-        where: { id: body.departmentId },
-      })
-
-      if (!department) {
-        return new NextResponse("Department not found", { status: 404 })
-      }
-    }
-
+    // Update the template
     const updatedTemplate = await db.formTemplate.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name: body.name,
         description: body.description,
         type: body.type,
         departmentId: body.departmentId,
+        workflowId: body.workflowId,
         phaseId: body.phaseId,
         schema: body.schema,
-        layout: body.layout,
-        style: body.style,
-        metadata: body.metadata,
-        order: body.order ?? template.order,
-        isActive: body.isActive ?? template.isActive,
+        layout: body.layout || {},
+        style: body.style || {},
+        metadata: body.metadata || {},
+        order: body.order || 0,
+        isActive: body.isActive,
       },
       include: {
         department: true,
         phase: true,
+        workflow: true,
+        versions: {
+          orderBy: {
+            version: "desc",
+          },
+          take: 1,
+        },
       },
     })
 
     return NextResponse.json(updatedTemplate)
   } catch (error) {
-    console.error("[FORM_TEMPLATE_PUT]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[FORM_TEMPLATE_UPDATE]", error)
+    return new NextResponse("Internal Error", { status: 500 })
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+/**
+ * DELETE /api/forms/templates/[id]
+ * Delete a form template
+ */
+export async function DELETE(req: Request, { params }: RouteParams) {
   try {
-    // Validate template ID
-    const templateId = params?.id
-    if (!templateId || typeof templateId !== 'string') {
-      return NextResponse.json(
-        { error: "Invalid template ID" },
-        { status: 400 }
-      )
+    const session = await getServerSession()
+    if (!session) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
-    }
-
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      )
+    const id = params.id
+    if (!id) {
+      return new NextResponse("Template ID is required", { status: 400 })
     }
 
     // Check if template exists
     const template = await db.formTemplate.findUnique({
-      where: { id: templateId },
+      where: { id },
       include: {
         responses: true,
-        versions: true,
       },
     })
 
     if (!template) {
-      return NextResponse.json(
-        { error: "Template not found" },
-        { status: 404 }
-      )
+      return new NextResponse("Template not found", { status: 404 })
     }
 
-    // Check if template has any responses
+    // Check if template has responses
     if (template.responses.length > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete template with existing responses" },
+      return new NextResponse(
+        "Cannot delete template with existing responses", 
         { status: 400 }
       )
     }
 
-    // Delete all versions first
-    if (template.versions?.length > 0) {
-      await db.formVersion.deleteMany({
-        where: { templateId },
-      })
-    }
-
     // Delete the template
     await db.formTemplate.delete({
-      where: { id: templateId },
+      where: { id },
     })
 
-    return NextResponse.json(
-      { message: "Template deleted successfully" },
-      { status: 200 }
-    )
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error("[FORM_TEMPLATE_DELETE]", error)
-    return NextResponse.json(
-      { error: "Failed to delete template" },
-      { status: 500 }
-    )
+    return new NextResponse("Internal Error", { status: 500 })
   }
 } 

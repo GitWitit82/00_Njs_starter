@@ -14,23 +14,31 @@ const createVersionSchema = z.object({
   changelog: z.string().min(1, "Changelog is required"),
 })
 
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
 /**
  * GET /api/forms/templates/[id]/versions
  * Get all versions of a form template
  */
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: Request, { params }: RouteParams) {
   try {
     const session = await getServerSession()
     if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
+    const id = params.id
+    if (!id) {
+      return new NextResponse("Template ID is required", { status: 400 })
+    }
+
     const versions = await prisma.formVersion.findMany({
       where: {
-        templateId: params.id,
+        templateId: id,
       },
       orderBy: {
         version: "desc",
@@ -38,9 +46,7 @@ export async function GET(
       include: {
         createdBy: {
           select: {
-            id: true,
             name: true,
-            email: true,
           },
         },
       },
@@ -48,7 +54,7 @@ export async function GET(
 
     return NextResponse.json(versions)
   } catch (error) {
-    console.error("[FORM_VERSIONS_GET]", error)
+    console.error("[FORM_TEMPLATE_VERSIONS_GET]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
 }
