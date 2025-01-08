@@ -36,7 +36,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const id = params.id
+    const id = await Promise.resolve(params.id)
     if (!id) {
       return new NextResponse("Template ID is required", { status: 400 })
     }
@@ -78,7 +78,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const id = params.id
+    const id = await Promise.resolve(params.id)
     if (!id) {
       return new NextResponse("Template ID is required", { status: 400 })
     }
@@ -157,7 +157,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const id = params.id
+    const id = await Promise.resolve(params.id)
     if (!id) {
       return new NextResponse("Template ID is required", { status: 400 })
     }

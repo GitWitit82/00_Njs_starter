@@ -41,7 +41,7 @@ interface FormBuilderProps {
  * Edit form template page
  */
 export default async function EditFormTemplatePage({ params }: PageProps) {
-  const id = params.id
+  const id = await Promise.resolve(params.id)
 
   if (!id) {
     notFound()

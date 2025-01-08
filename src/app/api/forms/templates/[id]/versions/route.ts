@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const id = params.id
+    const id = await Promise.resolve(params.id)
     if (!id) {
       return new NextResponse("Template ID is required", { status: 400 })
     }
@@ -63,14 +63,16 @@ export async function GET(req: Request, { params }: RouteParams) {
  * POST /api/forms/templates/[id]/versions
  * Create a new version of a form template
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: Request, { params }: RouteParams) {
   try {
     const session = await getServerSession()
     if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    const id = await Promise.resolve(params.id)
+    if (!id) {
+      return new NextResponse("Template ID is required", { status: 400 })
     }
 
     const json = await req.json()
@@ -87,7 +89,7 @@ export async function POST(
 
     // Get the template and its current version
     const template = await prisma.formTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         versions: {
           orderBy: { version: "desc" },
