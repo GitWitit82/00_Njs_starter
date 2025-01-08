@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { PrintChecklistForm } from "./PrintChecklistForm"
+import { StandardChecklist } from "./StandardChecklist"
 
 interface FormTemplateListProps {
   templates: any[]
@@ -47,12 +47,30 @@ export function FormTemplateList({
   const renderPreview = () => {
     if (!previewTemplate) return null
 
-    // For print checklist form type
-    if (previewTemplate.name.toLowerCase().includes('print checklist') || 
-        previewTemplate.type === "CHECKLIST") {
+    // For checklist type forms
+    if (previewTemplate.type === "CHECKLIST") {
+      const tasks = previewTemplate.schema.sections[0]?.fields.map((field: any) => ({
+        id: field.id,
+        text: field.label,
+        isCompleted: false
+      })) || []
+
       return (
-        <PrintChecklistForm 
-          departmentColor={previewTemplate.department?.color || "#004B93"} 
+        <StandardChecklist
+          title={previewTemplate.name}
+          departmentColor={previewTemplate.department?.color}
+          description={previewTemplate.description}
+          tasks={tasks}
+          projectDetails={{
+            enabled: true,
+            fields: [
+              { id: "client", label: "Client", type: "text" },
+              { id: "project", label: "Project", type: "text" },
+              { id: "date", label: "Date", type: "date" },
+              { id: "vinNumber", label: "VIN Number", type: "text" },
+              { id: "invoice", label: "Invoice#", type: "text" }
+            ]
+          }}
         />
       )
     }
@@ -83,29 +101,38 @@ export function FormTemplateList({
             <TableRow key={template.id}>
               <TableCell>{template.name}</TableCell>
               <TableCell>{template.type}</TableCell>
-              <TableCell>{template.department?.name}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: template.department?.color }}
+                  />
+                  {template.department?.name}
+                </div>
+              </TableCell>
               <TableCell>{template.phase?.name}</TableCell>
               <TableCell>v{template.currentVersion}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePreview(template)}
                   >
                     Preview
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => onEdit?.(template)}
                   >
                     Edit
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
                     onClick={() => onDelete?.(template)}
+                    className="text-red-500"
                   >
                     Delete
                   </Button>
