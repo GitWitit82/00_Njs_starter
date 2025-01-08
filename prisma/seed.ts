@@ -3,6 +3,222 @@ import { hash } from "bcryptjs"
 
 const prisma = new PrismaClient()
 
+async function seedFormStatusTracking() {
+  const admin = await prisma.user.findFirst({
+    where: { role: "ADMIN" }
+  })
+
+  if (!admin) throw new Error("Admin user not found")
+
+  // Create a test workflow for forms
+  const formWorkflow = await prisma.workflow.create({
+    data: {
+      name: "Form Testing Workflow",
+      description: "Workflow for testing form dependencies and status tracking"
+    }
+  })
+
+  // Create phases for the workflow
+  const phases = await Promise.all([
+    prisma.phase.create({
+      data: {
+        name: "Initial Review",
+        description: "First phase of form review",
+        order: 1,
+        workflowId: formWorkflow.id
+      }
+    }),
+    prisma.phase.create({
+      data: {
+        name: "Detailed Assessment",
+        description: "Detailed form assessment phase",
+        order: 2,
+        workflowId: formWorkflow.id
+      }
+    }),
+    prisma.phase.create({
+      data: {
+        name: "Final Approval",
+        description: "Final approval phase",
+        order: 3,
+        workflowId: formWorkflow.id
+      }
+    })
+  ])
+
+  // Create a series of dependent form templates
+  const formTemplates = await Promise.all([
+    // Initial Assessment Form
+    prisma.formTemplate.create({
+      data: {
+        name: "Initial Assessment Form",
+        description: "Must be completed first",
+        type: "FORM",
+        workflowId: formWorkflow.id,
+        phaseId: phases[0].id,
+        schema: { sections: [] },
+        priority: "CRITICAL"
+      }
+    }),
+    // Detailed Review Form
+    prisma.formTemplate.create({
+      data: {
+        name: "Detailed Review Form",
+        description: "Depends on Initial Assessment",
+        type: "FORM",
+        workflowId: formWorkflow.id,
+        phaseId: phases[1].id,
+        schema: { sections: [] },
+        priority: "STANDARD"
+      }
+    }),
+    // Final Approval Form
+    prisma.formTemplate.create({
+      data: {
+        name: "Final Approval Form",
+        description: "Requires all previous forms to be completed",
+        type: "FORM",
+        workflowId: formWorkflow.id,
+        phaseId: phases[2].id,
+        schema: { sections: [] },
+        priority: "CRITICAL"
+      }
+    })
+  ])
+
+  // Create completion requirements with dependencies
+  const requirements = await Promise.all([
+    // Initial Assessment Requirement
+    prisma.formCompletionRequirement.create({
+      data: {
+        templateId: formTemplates[0].id,
+        phaseId: phases[0].id,
+        isRequired: true,
+        requiredForPhase: true,
+        requiredForTask: true,
+        completionOrder: 1
+      }
+    }),
+    // Detailed Review Requirement
+    prisma.formCompletionRequirement.create({
+      data: {
+        templateId: formTemplates[1].id,
+        phaseId: phases[1].id,
+        isRequired: true,
+        requiredForPhase: true,
+        requiredForTask: true,
+        completionOrder: 2,
+        dependsOn: {
+          connect: { id: formTemplates[0].id }
+        }
+      }
+    }),
+    // Final Approval Requirement
+    prisma.formCompletionRequirement.create({
+      data: {
+        templateId: formTemplates[2].id,
+        phaseId: phases[2].id,
+        isRequired: true,
+        requiredForPhase: true,
+        requiredForTask: true,
+        completionOrder: 3,
+        dependsOn: {
+          connect: [
+            { id: formTemplates[0].id },
+            { id: formTemplates[1].id }
+          ]
+        }
+      }
+    })
+  ])
+
+  // Create a test project
+  const project = await prisma.project.create({
+    data: {
+      name: "Form Testing Project",
+      description: "Project for testing form status tracking",
+      status: "PLANNING",
+      startDate: new Date(),
+      workflowId: formWorkflow.id,
+      managerId: admin.id
+    }
+  })
+
+  // Create form instances for the project
+  const instances = await Promise.all(
+    formTemplates.map(template =>
+      prisma.formInstance.create({
+        data: {
+          templateId: template.id,
+          versionId: "1", // Assuming version 1
+          projectId: project.id,
+          projectTaskId: "task1", // You'll need to create actual tasks
+          status: "ACTIVE"
+        }
+      })
+    )
+  )
+
+  // Create status history for the first instance
+  const statusHistory = [
+    {
+      status: "ACTIVE",
+      comments: "Form instance created",
+      metadata: { initialCreation: true }
+    },
+    {
+      status: "IN_PROGRESS",
+      comments: "Started working on form",
+      metadata: { startedBy: admin.id }
+    },
+    {
+      status: "ON_HOLD",
+      comments: "Waiting for additional information",
+      metadata: { reason: "Missing client input" }
+    },
+    {
+      status: "IN_PROGRESS",
+      comments: "Resumed work after receiving information",
+      metadata: { resumedBy: admin.id }
+    },
+    {
+      status: "PENDING_REVIEW",
+      comments: "Ready for review",
+      metadata: { completionPercentage: 100 }
+    },
+    {
+      status: "COMPLETED",
+      comments: "Form approved and completed",
+      metadata: { approvedBy: admin.id }
+    }
+  ]
+
+  // Create status history entries with delays
+  for (const status of statusHistory) {
+    await prisma.formStatusHistory.create({
+      data: {
+        instanceId: instances[0].id,
+        status: status.status as any,
+        changedById: admin.id,
+        comments: status.comments,
+        metadata: status.metadata,
+        changedAt: new Date()
+      }
+    })
+
+    // Update the instance status
+    await prisma.formInstance.update({
+      where: { id: instances[0].id },
+      data: { status: status.status as any }
+    })
+
+    // Add a small delay between status changes
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+
+  console.log("Form status tracking seed data created successfully")
+}
+
 async function main() {
   // Clean up existing data
   await prisma.userPreference.deleteMany()
@@ -187,6 +403,9 @@ async function main() {
       })
     )
   )
+
+  // Seed form status tracking data
+  await seedFormStatusTracking()
 
   console.log("Seed data created successfully")
 }

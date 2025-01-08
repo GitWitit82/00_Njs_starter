@@ -19,7 +19,7 @@ const updateResponseSchema = z.object({
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: { instanceId: string; responseId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -30,7 +30,7 @@ export async function GET(
     const response = await prisma.formResponse.findFirst({
       where: {
         id: params.responseId,
-        instanceId: params.id,
+        instanceId: params.instanceId,
       },
       include: {
         submittedBy: {
@@ -81,7 +81,7 @@ export async function GET(
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: { instanceId: string; responseId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -157,7 +157,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string; responseId: string } }
+  { params }: { params: { instanceId: string; responseId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -168,7 +168,7 @@ export async function DELETE(
     const response = await prisma.formResponse.findFirst({
       where: {
         id: params.responseId,
-        instanceId: params.id,
+        instanceId: params.instanceId,
       },
     })
 

@@ -18,7 +18,7 @@ const createResponseSchema = z.object({
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { instanceId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -28,7 +28,7 @@ export async function GET(
 
     const responses = await prisma.formResponse.findMany({
       where: {
-        instanceId: params.id,
+        instanceId: params.instanceId,
       },
       include: {
         submittedBy: {
@@ -78,7 +78,7 @@ export async function GET(
  */
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { instanceId: string } }
 ) {
   try {
     const session = await getServerSession()
@@ -103,7 +103,7 @@ export async function POST(
       // Create the response
       const response = await tx.formResponse.create({
         data: {
-          instanceId: params.id,
+          instanceId: params.instanceId,
           data: body.data,
           metadata: body.metadata,
           version: body.version,

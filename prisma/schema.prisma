@@ -55,6 +55,7 @@ model User {
   reviewedForms   FormResponse[]        @relation("FormReviews")
   createdVersions FormVersion[] // Add relation for form versions
   responseHistory FormResponseHistory[] // Add relation for response history
+  statusChanges   FormStatusHistory[]
 }
 
 model VerificationToken {
@@ -89,6 +90,7 @@ model Phase {
   tasks         WorkflowTask[]
   formTemplates FormTemplate[]
   projectPhases ProjectPhase[] // Instances of this phase in projects
+  completionRequirements FormCompletionRequirement[]
 }
 
 model WorkflowTask {
@@ -195,6 +197,7 @@ model FormTemplate {
   versions       FormVersion[]  @relation("TemplateVersions") // Relation to form versions
   currentVersion Int            @default(1)
   instances      FormInstance[] @relation("TemplateInstances") // Relation to form instances
+  completionRequirements FormCompletionRequirement[]
 }
 
 model FormVersion {
@@ -230,6 +233,7 @@ model FormInstance {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   responses     FormResponse[]     @relation("InstanceResponses")
+  statusHistory FormStatusHistory[] @relation("InstanceStatusHistory")
 
   @@unique([templateId, projectTaskId])
 }
@@ -367,8 +371,11 @@ enum FormStatus {
 
 enum FormInstanceStatus {
   ACTIVE
+  IN_PROGRESS
+  PENDING_REVIEW
   COMPLETED
   ARCHIVED
+  ON_HOLD
 }
 
 enum ChangeType {
@@ -378,4 +385,36 @@ enum ChangeType {
   REVIEWED
   APPROVED
   REJECTED
+}
+
+// New model for form status history
+model FormStatusHistory {
+  id            String             @id @default(cuid())
+  instanceId    String
+  instance      FormInstance       @relation("InstanceStatusHistory", fields: [instanceId], references: [id], onDelete: Cascade)
+  status        FormInstanceStatus
+  changedAt     DateTime           @default(now())
+  changedById   String
+  changedBy     User              @relation(fields: [changedById], references: [id])
+  metadata      Json?             // Stores additional context like task status, phase status, etc.
+  comments      String?
+}
+
+// New model for form completion requirements
+model FormCompletionRequirement {
+  id                String        @id @default(cuid())
+  templateId        String
+  template          FormTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  phaseId           String
+  phase             Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  isRequired        Boolean       @default(true)
+  requiredForPhase  Boolean       @default(false)
+  requiredForTask   Boolean       @default(true)
+  completionOrder   Int?          // Optional order in which forms should be completed
+  dependsOn         FormCompletionRequirement[] @relation("FormDependencies")
+  dependentForms    FormCompletionRequirement[] @relation("FormDependencies")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([templateId, phaseId])
 }

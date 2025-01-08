@@ -56,6 +56,36 @@ export class FormInstanceService {
   }
 
   /**
+   * Updates the status of multiple form instances
+   */
+  static async batchUpdateStatus(
+    formIds: string[],
+    status: string,
+    comment?: string,
+    metadata?: Record<string, any>
+  ): Promise<{ message: string; updatedForms: number }> {
+    const response = await fetch('/api/forms/instances/batch-status', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        formIds,
+        status,
+        comment,
+        metadata
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to update form statuses')
+    }
+
+    return response.json()
+  }
+
+  /**
    * Creates a new form response
    */
   static async createResponse(
