@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { X } from "lucide-react"
+import { SplitViewLayout } from "./SplitViewLayout"
+import { FormPreview } from "./FormPreview"
 
 interface WorkflowWithPhases extends PrismaWorkflow {
   phases: Phase[]
@@ -352,37 +354,37 @@ export function LiveFormBuilder({
   }
 
   if (isLoading || isLoadingData) {
-        return (
+    return (
       <div className="space-y-6">
         <div className="p-6 rounded-t-lg bg-gray-200 animate-pulse h-32" />
-            <div className="space-y-4">
+        <div className="space-y-4">
           <div className="p-4 rounded-lg bg-gray-100 animate-pulse h-24" />
           <div className="p-4 rounded-lg bg-gray-100 animate-pulse h-48" />
-            </div>
-          </div>
-        )
+        </div>
+      </div>
+    )
   }
 
   if (loadError) {
-        return (
+    return (
       <div className="p-6 space-y-4">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-red-800">Error Loading Form</h3>
           <p className="text-sm text-red-600 mt-1">{loadError}</p>
-              <Button
-                variant="outline"
-                size="sm"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => window.location.reload()}
             className="mt-4"
           >
             Try Again
-                  </Button>
-            </div>
-          </div>
-        )
+          </Button>
+        </div>
+      </div>
+    )
   }
 
-  return (
+  const builderContent = (
     <div className="space-y-6">
       {/* Form Header */}
       <div 
@@ -905,13 +907,13 @@ export function LiveFormBuilder({
       </div>
 
       <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
+        <Button
+          variant="outline"
           onClick={handleAddSection}
-            >
+        >
           <PlusCircle className="h-4 w-4 mr-2" />
           Add Section
-            </Button>
+        </Button>
         <Button
           onClick={handleSave}
           disabled={isSaving}
@@ -920,11 +922,18 @@ export function LiveFormBuilder({
           {isSaving && (
             <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          </div>
+            </div>
           )}
           {isSaving ? "Saving..." : "Save Form"}
         </Button>
       </div>
     </div>
+  )
+
+  return (
+    <SplitViewLayout
+      builder={builderContent}
+      preview={<FormPreview formData={formData} />}
+    />
   )
 } 

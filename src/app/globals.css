@@ -86,3 +86,10 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Resize cursor styles */
+.resize-cursor,
+.resize-cursor * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}

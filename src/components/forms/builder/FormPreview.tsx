@@ -1,9 +1,12 @@
 "use client"
 
+import { FormTemplate } from "@/lib/validations/form"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -12,174 +15,115 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-interface Field {
-  id: string
-  label: string
-  type: string
-  required: boolean
-  options?: any[]
-}
-
-interface Section {
-  id: string
-  title: string
-  description: string
-  fields: Field[]
-}
-
-interface FormSchema {
-  sections: Section[]
-}
-
-interface FormData {
-  id?: string
-  name: string
-  description: string
-  type: string
-  departmentId: string
-  workflowId?: string
-  phaseId?: string
-  schema: FormSchema
-  layout: Record<string, any>
-  style: Record<string, any>
-  metadata: Record<string, any>
-  order: number
-  isActive: boolean
-}
-
 interface FormPreviewProps {
-  formData: FormData
-  departments?: {
-    id: string
-    name: string
-    color: string
-  }[]
+  formData: FormTemplate
 }
 
-export function FormPreview({ formData, departments = [] }: FormPreviewProps) {
-  const departmentColor = departments.find(d => d.id === formData.departmentId)?.color || "#004B93"
-
-  const renderField = (field: Field) => {
-    switch (field.type) {
-      case "text":
-      case "email":
-      case "tel":
-      case "number":
-      case "date":
-      case "time":
-      case "datetime-local":
-        return (
-          <Input
-            type={field.type}
-            placeholder={`Enter ${field.label.toLowerCase()}`}
-            required={field.required}
-          />
-        )
-      case "textarea":
-        return (
-          <Textarea
-            placeholder={`Enter ${field.label.toLowerCase()}`}
-            required={field.required}
-          />
-        )
-      case "select":
-        return (
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {field.options?.map((option, index) => (
-                <SelectItem key={index} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )
-      case "checkbox":
-        return (
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              required={field.required}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            <span>{field.label}</span>
-          </div>
-        )
-      case "radio":
-        return (
-          <div className="space-y-2">
-            {field.options?.map((option, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name={field.id}
-                  value={option}
-                  required={field.required}
-                  className="h-4 w-4 border-gray-300"
-                />
-                <span>{option}</span>
-              </div>
-            ))}
-          </div>
-        )
-      case "file":
-        return (
-          <Input
-            type="file"
-            required={field.required}
-            accept={field.options?.join(",")}
-          />
-        )
-      default:
-        return null
-    }
-  }
-
+export function FormPreview({ formData }: FormPreviewProps) {
   return (
     <div className="space-y-6">
-      <div 
-        className="p-4 rounded-t-lg"
-        style={{ backgroundColor: departmentColor }}
-      >
-        <h1 className="text-2xl font-bold text-white">{formData.name}</h1>
+      {/* Form Header Preview */}
+      <div className="p-6 bg-gray-50 rounded-lg">
+        <h2 className="text-2xl font-bold">{formData.name || "Untitled Form"}</h2>
         {formData.description && (
-          <p className="text-gray-100 mt-1">{formData.description}</p>
+          <p className="mt-2 text-gray-600">{formData.description}</p>
         )}
       </div>
 
-      <form className="space-y-8">
-        {formData.schema.sections.map((section) => (
+      {/* Sections Preview */}
+      <div className="space-y-6">
+        {formData.sections.map((section) => (
           <Card key={section.id} className="p-6">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-medium">{section.title}</h2>
-                {section.description && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    {section.description}
-                  </p>
-                )}
-              </div>
+            <h3 className="text-xl font-semibold mb-2">{section.title}</h3>
+            {section.description && (
+              <p className="text-gray-600 mb-4">{section.description}</p>
+            )}
 
-              <div className="grid gap-6">
-                {section.fields.map((field) => (
-                  <div key={field.id} className="space-y-2">
-                    <Label htmlFor={field.id}>
-                      {field.label}
-                      {field.required && (
-                        <span className="ml-1 text-red-500">*</span>
-                      )}
-                    </Label>
-                    {renderField(field)}
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-4">
+              {section.items.map((item) => (
+                <div key={item.id} className="space-y-2">
+                  <Label>{item.content}</Label>
+
+                  {item.type === "TEXT" && (
+                    <Input disabled placeholder="Text input" />
+                  )}
+
+                  {item.type === "TEXTAREA" && (
+                    <Textarea 
+                      disabled 
+                      placeholder="Text area input" 
+                      className={
+                        item.size === "small" ? "h-20" :
+                        item.size === "large" ? "h-48" : "h-32"
+                      }
+                    />
+                  )}
+
+                  {item.type === "CHECKLIST" && (
+                    <div>
+                      <div className="bg-black text-white p-2 text-center font-bold">
+                        TASKS
+                      </div>
+                      <div className="border border-black">
+                        {item.options?.map((option, index) => (
+                          <div key={index} className="flex border-b border-black last:border-b-0">
+                            <div className="w-12 p-2 border-r border-black text-center font-bold">
+                              {index + 1}
+                            </div>
+                            <div className="w-12 p-2 border-r border-black flex items-center justify-center">
+                              <div className="w-6 h-6 border-2 border-black rounded-full" />
+                            </div>
+                            <div className="flex-1 p-2 text-sm">
+                              {option}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {item.type === "RADIO" && (
+                    <RadioGroup disabled>
+                      {item.options?.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <RadioGroupItem value={option} id={`radio-${item.id}-${index}`} />
+                          <Label htmlFor={`radio-${item.id}-${index}`}>{option}</Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
+
+                  {item.type === "CHECKBOX" && (
+                    <div className="space-y-2">
+                      {item.options?.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <Checkbox id={`checkbox-${item.id}-${index}`} disabled />
+                          <Label htmlFor={`checkbox-${item.id}-${index}`}>{option}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {item.type === "SELECT" && (
+                    <Select disabled>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {item.options?.map((option, index) => (
+                          <SelectItem key={index} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              ))}
             </div>
           </Card>
         ))}
-      </form>
+      </div>
     </div>
   )
 } 
