@@ -14,19 +14,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 interface FormPreviewProps {
   formData: FormTemplate
+  departments?: {
+    id: string
+    name: string
+    color: string
+  }[]
 }
 
-export function FormPreview({ formData }: FormPreviewProps) {
+export function FormPreview({ formData, departments = [] }: FormPreviewProps) {
+  const departmentColor = formData.departmentId 
+    ? departments.find(d => d.id === formData.departmentId)?.color || '#e5e7eb'
+    : '#e5e7eb'
+
   return (
     <div className="space-y-6">
       {/* Form Header Preview */}
-      <div className="p-6 bg-gray-50 rounded-lg">
-        <h2 className="text-2xl font-bold">{formData.name || "Untitled Form"}</h2>
+      <div 
+        className="p-6 rounded-lg"
+        style={{ backgroundColor: departmentColor }}
+      >
+        <h2 className="text-2xl font-bold text-black">{formData.name || "Untitled Form"}</h2>
         {formData.description && (
-          <p className="mt-2 text-gray-600">{formData.description}</p>
+          <p className="mt-2 text-black/80">{formData.description}</p>
         )}
       </div>
 
@@ -39,9 +52,17 @@ export function FormPreview({ formData }: FormPreviewProps) {
               <p className="text-gray-600 mb-4">{section.description}</p>
             )}
 
-            <div className="space-y-4">
+            <div className="grid gap-4">
               {section.items.map((item) => (
-                <div key={item.id} className="space-y-2">
+                <div 
+                  key={item.id} 
+                  className={cn(
+                    "space-y-2",
+                    item.layout.width === "half" && "col-span-6",
+                    item.layout.width === "third" && "col-span-4",
+                    item.layout.width === "full" && "col-span-12"
+                  )}
+                >
                   <Label>{item.content}</Label>
 
                   {item.type === "TEXT" && (
@@ -52,56 +73,12 @@ export function FormPreview({ formData }: FormPreviewProps) {
                     <Textarea 
                       disabled 
                       placeholder="Text area input" 
-                      className={
-                        item.size === "small" ? "h-20" :
-                        item.size === "large" ? "h-48" : "h-32"
-                      }
+                      className={cn(
+                        item.size === "small" && "h-20",
+                        item.size === "normal" && "h-32",
+                        item.size === "large" && "h-48"
+                      )}
                     />
-                  )}
-
-                  {item.type === "CHECKLIST" && (
-                    <div>
-                      <div className="bg-black text-white p-2 text-center font-bold">
-                        TASKS
-                      </div>
-                      <div className="border border-black">
-                        {item.options?.map((option, index) => (
-                          <div key={index} className="flex border-b border-black last:border-b-0">
-                            <div className="w-12 p-2 border-r border-black text-center font-bold">
-                              {index + 1}
-                            </div>
-                            <div className="w-12 p-2 border-r border-black flex items-center justify-center">
-                              <div className="w-6 h-6 border-2 border-black rounded-full" />
-                            </div>
-                            <div className="flex-1 p-2 text-sm">
-                              {option}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {item.type === "RADIO" && (
-                    <RadioGroup disabled>
-                      {item.options?.map((option, index) => (
-                        <div key={index} className="flex items-center space-x-2">
-                          <RadioGroupItem value={option} id={`radio-${item.id}-${index}`} />
-                          <Label htmlFor={`radio-${item.id}-${index}`}>{option}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  )}
-
-                  {item.type === "CHECKBOX" && (
-                    <div className="space-y-2">
-                      {item.options?.map((option, index) => (
-                        <div key={index} className="flex items-center space-x-2">
-                          <Checkbox id={`checkbox-${item.id}-${index}`} disabled />
-                          <Label htmlFor={`checkbox-${item.id}-${index}`}>{option}</Label>
-                        </div>
-                      ))}
-                    </div>
                   )}
 
                   {item.type === "SELECT" && (
@@ -117,6 +94,59 @@ export function FormPreview({ formData }: FormPreviewProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+
+                  {item.type === "CHECKBOX" && item.options && (
+                    <div className="space-y-2">
+                      {item.options.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <Checkbox id={`${item.id}-${index}`} disabled />
+                          <label
+                            htmlFor={`${item.id}-${index}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {item.type === "RADIO" && item.options && (
+                    <RadioGroup disabled>
+                      {item.options.map((option, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <RadioGroupItem value={option} id={`${item.id}-${index}`} />
+                          <label
+                            htmlFor={`${item.id}-${index}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
+
+                  {item.type === "CHECKLIST" && item.options && (
+                    <div className="border border-black">
+                      <div className="bg-black text-white p-2 text-center font-bold">
+                        TASKS
+                      </div>
+                      {item.options.map((task, index) => (
+                        <div key={index} className="flex border-b border-black last:border-b-0">
+                          <div className="w-12 p-2 border-r border-black text-center font-bold">
+                            {index + 1}
+                          </div>
+                          <div className="w-12 p-2 border-r border-black flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-black rounded-full" />
+                          </div>
+                          <div className="flex-1 p-2 text-sm">
+                            {task}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}
