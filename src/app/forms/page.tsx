@@ -6,6 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FormTemplates from "./templates"
 import FormInstances from "./instances"
 
+/**
+ * Main Forms page component
+ * Provides tabbed interface for managing form templates and instances
+ * @returns React.FC
+ */
 export default function FormsPage() {
   return (
     <div className="space-y-6">

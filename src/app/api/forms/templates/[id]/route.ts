@@ -150,37 +150,36 @@ export async function PUT(req: Request, { params }: RouteParams) {
  * DELETE /api/forms/templates/[id]
  * Delete a form template
  */
-export async function DELETE(req: Request, { params }: RouteParams) {
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const session = await getServerSession()
-    if (!session) {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const id = await Promise.resolve(params.id)
+    const { id } = params
+
     if (!id) {
       return new NextResponse("Template ID is required", { status: 400 })
     }
 
-    // Check if template exists
+    // Check if template exists and belongs to user
     const template = await db.formTemplate.findUnique({
       where: { id },
-      include: {
-        responses: true,
-      },
     })
 
     if (!template) {
       return new NextResponse("Template not found", { status: 404 })
     }
 
-    // Check if template has responses
-    if (template.responses.length > 0) {
-      return new NextResponse(
-        "Cannot delete template with existing responses", 
-        { status: 400 }
-      )
-    }
+    // Delete all form instances first
+    await db.formInstance.deleteMany({
+      where: { templateId: id },
+    })
 
     // Delete the template
     await db.formTemplate.delete({
@@ -189,7 +188,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error("[FORM_TEMPLATE_DELETE]", error)
+    console.error("[TEMPLATE_DELETE]", error)
     return new NextResponse("Internal Error", { status: 500 })
   }
 } 

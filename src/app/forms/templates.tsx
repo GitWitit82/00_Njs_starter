@@ -1,6 +1,6 @@
 import { headers } from "next/headers"
 import { prisma } from "@/lib/prisma"
-import { FormTemplateList } from "@/components/forms/FormTemplateList"
+import { FormTemplateList } from "@/components/forms/templates/FormTemplateList"
 import { FormTemplateListWrapper } from "./templates-wrapper"
 
 async function getFormTemplates() {

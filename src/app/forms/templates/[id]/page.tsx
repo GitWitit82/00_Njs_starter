@@ -1,6 +1,7 @@
+import { Suspense } from "react"
 import { db } from "@/lib/db"
-import { FormBuilder } from "@/components/forms/FormBuilder"
-import { Department, FormTemplate, Workflow } from "@prisma/client"
+import { FormBuilderWrapper } from "@/components/forms/builder/form-builder-wrapper"
+import { Department, FormTemplate, Workflow, User } from "@prisma/client"
 import { notFound } from "next/navigation"
 
 interface PageProps {
@@ -9,75 +10,58 @@ interface PageProps {
   }
 }
 
-interface WorkflowWithPhases extends Workflow {
-  phases: {
-    id: string
-    name: string
-    description: string | null
-    createdAt: Date
-    updatedAt: Date
-    order: number
-    workflowId: string
-  }[]
-}
-
-interface DepartmentData extends Omit<Department, "userId"> {
-  color: string
-}
-
-interface FormBuilderProps {
-  initialData: FormTemplate & {
-    department: Department | null
-    phase: {
-      id: string
-      name: string
-    }
-  } | null
-  departments: DepartmentData[]
-  workflows: WorkflowWithPhases[]
+interface FormTemplateWithRelations extends FormTemplate {
+  department: Department | null
+  workflow: Workflow | null
+  user: User
 }
 
 /**
- * Edit form template page
+ * Form template edit page - Server Component
  */
-export default async function EditFormTemplatePage({ params }: PageProps) {
-  const id = await Promise.resolve(params.id)
+export default async function FormTemplatePage({
+  params,
+}: PageProps) {
+  const { id } = params
 
-  if (!id) {
-    notFound()
-  }
-
-  const [template, departments, workflows] = await Promise.all([
-    db.formTemplate.findUnique({
-      where: { id },
-      include: {
-        department: true,
-        phase: true,
-        workflow: true,
-      },
-    }),
-    db.department.findMany({
-      orderBy: { name: "asc" },
-    }),
-    db.workflow.findMany({
-      include: {
-        phases: {
-          orderBy: { order: "asc" },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ])
+  // Fetch template with relations
+  const template = await db.formTemplate.findUnique({
+    where: { id },
+    include: {
+      department: true,
+      workflow: true,
+      user: true,
+    },
+  })
 
   if (!template) {
     notFound()
   }
 
+  // Fetch departments for dropdown
+  const departments = await db.department.findMany({
+    orderBy: { name: "asc" },
+  })
+
+  // Fetch workflows with phases for dropdown
+  const workflows = await db.workflow.findMany({
+    include: {
+      phases: {
+        orderBy: { order: "asc" },
+      },
+    },
+    orderBy: { name: "asc" },
+  })
+
   return (
-    <FormBuilder
-      departments={departments}
-      workflows={workflows}
-      initialData={template}
-    />
+    <div className="container py-6">
+      <Suspense fallback={<div>Loading preview...</div>}>
+        <FormBuilderWrapper
+          template={template}
+          departments={departments}
+          workflows={workflows}
+        />
+      </Suspense>
+    </div>
   )
 } 

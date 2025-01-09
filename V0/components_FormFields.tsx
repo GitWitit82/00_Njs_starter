@@ -9,11 +9,16 @@ export default function FormFields() {
     date: '',
     vinNumber: '',
     invoice: '',
+    mirroredGraphicalItems: false,
+    fleet: false,
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    const { name, value, type, checked } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }))
   }
 
   return (
@@ -77,6 +82,29 @@ export default function FormFields() {
       <p className="italic text-sm">Each item MUST be completed prior to sign off. Signature equals financial responsibility for step or any cost required to fix.</p>
 
       <PrinterSubstrateSelection />
+
+      <div className="flex items-center gap-4">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="mirroredGraphicalItems"
+            className="h-5 w-5 border-2"
+            onChange={handleInputChange}
+            checked={formData.mirroredGraphicalItems}
+          />
+          <span className="text-red-500 font-bold">Mirrored Graphical Items</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="fleet"
+            className="h-5 w-5 border-2"
+            onChange={handleInputChange}
+            checked={formData.fleet}
+          />
+          <span className="text-red-500 font-bold">FLEET</span>
+        </label>
+      </div>
     </div>
   )
 }

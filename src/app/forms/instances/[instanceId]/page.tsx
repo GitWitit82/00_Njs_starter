@@ -4,6 +4,7 @@ import { FormStatusOverview } from "@/components/forms/FormStatusOverview"
 import { FormResponse } from "@/components/forms/FormResponse"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { FormInstance, FormTemplate, Department, Workflow, Phase, Project } from "@prisma/client"
 
 interface PageProps {
   params: {
@@ -11,8 +12,25 @@ interface PageProps {
   }
 }
 
+type FormInstanceWithRelations = FormInstance & {
+  template: FormTemplate & {
+    department: Department | null
+    workflow: Workflow | null
+    phase: Phase | null
+  }
+  project: Project | null
+  responses: Array<{
+    id: string
+    createdAt: Date
+    data: Record<string, any>
+  }>
+}
+
 /**
  * Form instance details page
+ * Displays form instance details, status management, and response history
+ * @param {PageProps} props - Page properties containing instance ID
+ * @returns React.FC
  */
 export default async function FormInstancePage({ params }: PageProps) {
   const instance = await db.formInstance.findUnique({
@@ -31,7 +49,7 @@ export default async function FormInstancePage({ params }: PageProps) {
         take: 1
       }
     }
-  })
+  }) as FormInstanceWithRelations | null
 
   if (!instance) {
     notFound()
@@ -82,24 +100,27 @@ export default async function FormInstancePage({ params }: PageProps) {
         </Card>
       </div>
 
-      <Card className="p-6">
-        <Tabs defaultValue="current">
-          <TabsList>
-            <TabsTrigger value="current">Current Response</TabsTrigger>
-            <TabsTrigger value="history">Response History</TabsTrigger>
-          </TabsList>
-          <TabsContent value="current">
+      <Tabs defaultValue="current">
+        <TabsList>
+          <TabsTrigger value="current">Current Response</TabsTrigger>
+          <TabsTrigger value="history">Response History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="current">
+          <Card className="p-6">
             <FormResponse
-              instance={instance}
-              response={instance.responses[0]}
-              template={instance.template}
+              formId={instance.id}
+              templateId={instance.templateId}
+              currentResponse={instance.responses[0]?.data}
             />
-          </TabsContent>
-          <TabsContent value="history">
-            {/* Add FormResponseHistory component here */}
-          </TabsContent>
-        </Tabs>
-      </Card>
+          </Card>
+        </TabsContent>
+        <TabsContent value="history">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Response History</h3>
+            {/* TODO: Implement response history view */}
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 
