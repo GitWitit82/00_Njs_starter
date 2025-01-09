@@ -2,7 +2,9 @@ import { Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusIcon } from "lucide-react"
 import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FormTemplates from "./templates"
+import FormInstances from "./instances"
 
 export default function FormsPage() {
   return (
@@ -14,17 +16,34 @@ export default function FormsPage() {
             Manage form templates and responses for your workflows
           </p>
         </div>
-        <Link href="/forms/templates/new">
-          <Button>
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Create Template
-          </Button>
-        </Link>
+        <div className="space-x-2">
+          <Link href="/forms/templates/new">
+            <Button>
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Create Template
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <Suspense fallback={<div>Loading templates...</div>}>
-        <FormTemplates />
-      </Suspense>
+      <Tabs defaultValue="templates">
+        <TabsList>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="instances">Instances</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="templates">
+          <Suspense fallback={<div>Loading templates...</div>}>
+            <FormTemplates />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="instances">
+          <Suspense fallback={<div>Loading instances...</div>}>
+            <FormInstances />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 
