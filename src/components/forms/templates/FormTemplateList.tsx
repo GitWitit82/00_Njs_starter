@@ -43,7 +43,6 @@ export function FormTemplateList({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Department</TableHead>
-              <TableHead>Type</TableHead>
               <TableHead>Last Updated</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -61,11 +60,6 @@ export function FormTemplateList({
                     />
                     {template.department?.name || "No Department"}
                   </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">
-                    {template.type}
-                  </Badge>
                 </TableCell>
                 <TableCell>
                   {formatDistanceToNow(new Date(template.updatedAt), { addSuffix: true })}
@@ -110,7 +104,7 @@ export function FormTemplateList({
             ))}
             {templates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   No form templates found
                 </TableCell>
               </TableRow>

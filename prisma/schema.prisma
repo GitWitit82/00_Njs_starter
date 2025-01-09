@@ -177,7 +177,6 @@ model FormTemplate {
   id             String         @id @default(cuid())
   name           String
   description    String?
-  type           FormType       @default(FORM)
   priority       FormPriority   @default(STANDARD)
   departmentId   String?
   department     Department?    @relation(fields: [departmentId], references: [id])

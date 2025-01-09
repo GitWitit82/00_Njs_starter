@@ -18,6 +18,10 @@ import { Card } from "@/components/ui/card"
 import { FormItem, FormSection, FormTemplate } from "@/lib/validations/form"
 import { toast } from "sonner"
 import { formTemplateSchema } from "@/lib/validations/form"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
+import { X } from "lucide-react"
 
 interface WorkflowWithPhases extends PrismaWorkflow {
   phases: Phase[]
@@ -32,6 +36,15 @@ interface LiveFormBuilderProps {
   departments: Department[]
   workflows: WorkflowWithPhases[]
   onSave: (data: FormTemplate) => Promise<void>
+}
+
+interface FormItemLayout {
+  width: "full" | "half" | "third"
+  row: number
+}
+
+interface FormItemWithLayout extends FormItem {
+  layout: FormItemLayout
 }
 
 /**
@@ -51,7 +64,7 @@ export function LiveFormBuilder({
     departmentId: undefined,
     workflowId: undefined,
     phaseId: undefined,
-    schema: { sections: [] },
+    sections: [],
     isActive: true,
     userId: "",
     createdAt: new Date(),
@@ -81,7 +94,7 @@ export function LiveFormBuilder({
           departmentId: null,
           workflowId: null,
           phaseId: null,
-          schema: { sections: [] },
+          sections: [],
           isActive: true,
           user: {
             id: "default",
@@ -101,7 +114,7 @@ export function LiveFormBuilder({
           departmentId: templateData.departmentId || undefined,
           workflowId: templateData.workflowId || undefined,
           phaseId: templateData.phaseId || undefined,
-          schema: templateData.schema as { sections: FormSection[] } || { sections: [] },
+          sections: (templateData.schema as { sections: FormSection[] })?.sections || [],
           isActive: templateData.isActive ?? true,
           userId: templateData.user.id,
           createdAt: templateData.createdAt,
@@ -135,18 +148,24 @@ export function LiveFormBuilder({
       
       setFormData(prev => ({
         ...prev,
-        schema: {
-          ...prev.schema,
-          sections: [
-            ...prev.schema.sections,
-            {
-              id: sectionId,
-              title: "New Section",
-              type: "FORM",
-              items: []
-            }
-          ]
-        }
+        sections: [
+          ...prev.sections,
+          {
+            id: sectionId,
+            title: "New Section",
+            description: "",
+            items: [{
+              id: crypto.randomUUID(),
+              content: "New Field",
+              type: "TEXT",
+              required: false,
+              layout: {
+                width: "full",
+                row: 0
+              }
+            }]
+          }
+        ]
       }))
     } catch (error) {
       console.error("Error adding section:", error)
@@ -164,60 +183,56 @@ export function LiveFormBuilder({
     clearAllErrors()
     setFormData(prev => ({
       ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map(section =>
-          section.id === sectionId
-            ? {
-                ...section,
-                items: [
-                  ...section.items,
-                  {
-                    id: crypto.randomUUID(),
-                    content: "New Item",
-                    type: "TEXT",
-                    required: false
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              items: [
+                ...section.items,
+                {
+                  id: crypto.randomUUID(),
+                  content: "New Field",
+                  type: "TEXT",
+                  required: false,
+                  options: [],
+                  layout: {
+                    width: "full",
+                    row: 0
                   }
-                ]
-              }
-            : section
-        )
-      }
+                }
+              ]
+            }
+          : section
+      )
     }))
   }
 
   const handleSectionChange = (sectionId: string, field: keyof FormSection, value: any) => {
     setFormData(prev => ({
       ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map(section =>
-          section.id === sectionId
-            ? { ...section, [field]: value }
-            : section
-        )
-      }
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? { ...section, [field]: value }
+          : section
+      )
     }))
   }
 
   const handleItemChange = (sectionId: string, itemId: string, field: keyof FormItem, value: any) => {
     setFormData(prev => ({
       ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map(section =>
-          section.id === sectionId
-            ? {
-                ...section,
-                items: section.items.map(item =>
-                  item.id === itemId
-                    ? { ...item, [field]: value }
-                    : item
-                )
-              }
-            : section
-        )
-      }
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              items: section.items.map(item =>
+                item.id === itemId
+                  ? { ...item, [field]: value }
+                  : item
+              )
+            }
+          : section
+      )
     }))
   }
 
@@ -231,10 +246,7 @@ export function LiveFormBuilder({
       
       setFormData(prev => ({
         ...prev,
-        schema: {
-          ...prev.schema,
-          sections: prev.schema.sections.filter(section => section.id !== sectionId)
-        }
+        sections: prev.sections.filter(section => section.id !== sectionId)
       }))
     } catch (error) {
       console.error("Error deleting section:", error)
@@ -252,17 +264,14 @@ export function LiveFormBuilder({
     clearAllErrors()
     setFormData(prev => ({
       ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map(section =>
-          section.id === sectionId
-            ? {
-                ...section,
-                items: section.items.filter(item => item.id !== itemId)
-              }
-            : section
-        )
-      }
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              items: section.items.filter(item => item.id !== itemId)
+            }
+          : section
+      )
     }))
   }
 
@@ -270,25 +279,27 @@ export function LiveFormBuilder({
     clearAllErrors()
     setFormData(prev => ({
       ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map(section =>
-          section.id === sectionId
-            ? {
-                ...section,
-                items: [
-                  ...section.items,
-                  {
-                    id: crypto.randomUUID(),
-                    content: "New Task",
-                    type: "CHECKBOX",
-                    required: false
+      sections: prev.sections.map(section =>
+        section.id === sectionId
+          ? {
+              ...section,
+              items: [
+                ...section.items,
+                {
+                  id: crypto.randomUUID(),
+                  content: "New Task",
+                  type: "CHECKLIST",
+                  required: false,
+                  options: ["New Task"],
+                  layout: {
+                    width: "full",
+                    row: section.items.length
                   }
-                ]
-              }
-            : section
-        )
-      }
+                }
+              ]
+            }
+          : section
+      )
     }))
   }
 
@@ -341,34 +352,34 @@ export function LiveFormBuilder({
   }
 
   if (isLoading || isLoadingData) {
-    return (
+        return (
       <div className="space-y-6">
         <div className="p-6 rounded-t-lg bg-gray-200 animate-pulse h-32" />
-        <div className="space-y-4">
+            <div className="space-y-4">
           <div className="p-4 rounded-lg bg-gray-100 animate-pulse h-24" />
           <div className="p-4 rounded-lg bg-gray-100 animate-pulse h-48" />
-        </div>
-      </div>
-    )
+            </div>
+          </div>
+        )
   }
 
   if (loadError) {
-    return (
+        return (
       <div className="p-6 space-y-4">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-red-800">Error Loading Form</h3>
           <p className="text-sm text-red-600 mt-1">{loadError}</p>
-          <Button
-            variant="outline"
-            size="sm"
+              <Button
+                variant="outline"
+                size="sm"
             onClick={() => window.location.reload()}
             className="mt-4"
           >
             Try Again
-          </Button>
-        </div>
-      </div>
-    )
+                  </Button>
+            </div>
+          </div>
+        )
   }
 
   return (
@@ -388,13 +399,13 @@ export function LiveFormBuilder({
         {isLoadingColor && (
           <div className="absolute inset-0 bg-black/5 rounded-t-lg" />
         )}
-        <Input
+          <Input
           className={cn(
-            "text-2xl font-bold bg-transparent border-0 focus-visible:ring-0 placeholder:text-white/70 text-white",
+            "text-2xl font-bold bg-transparent border-0 focus-visible:ring-0 placeholder:text-black/70 text-black",
             errors["name"] && "border-red-500"
           )}
           placeholder="Enter form name"
-          value={formData.name}
+            value={formData.name}
           onChange={(e) => {
             setFormData(prev => ({ ...prev, name: e.target.value }))
             clearError("name")
@@ -404,8 +415,8 @@ export function LiveFormBuilder({
           <p className="text-sm text-red-500 mt-1">{errors["name"][0]}</p>
         )}
         <Textarea
-          className={cn(
-            "mt-2 bg-transparent border-0 focus-visible:ring-0 placeholder:text-white/70 text-white",
+            className={cn(
+            "mt-2 bg-transparent border-0 focus-visible:ring-0 placeholder:text-black/70 text-black",
             errors["description"] && "border-red-500"
           )}
           placeholder="Enter form description (optional)"
@@ -418,14 +429,14 @@ export function LiveFormBuilder({
         {errors["description"] && (
           <p className="text-sm text-red-500 mt-1">{errors["description"][0]}</p>
         )}
-      </div>
+        </div>
 
       {/* Project Info Section */}
       <Card className="p-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium">Department</label>
-            <Select
+            <Select 
               value={formData.departmentId || ""}
               onValueChange={async (value) => {
                 try {
@@ -454,7 +465,7 @@ export function LiveFormBuilder({
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: dept.color }}
                       />
-                      {dept.name}
+                    {dept.name}
                     </div>
                   </SelectItem>
                 ))}
@@ -504,9 +515,9 @@ export function LiveFormBuilder({
             )}
           </div>
         </div>
-
+        
         {formData.workflowId && (
-          <div>
+          <div className="mt-4">
             <label className="text-sm font-medium">Phase</label>
             <Select
               value={formData.phaseId || ""}
@@ -523,8 +534,8 @@ export function LiveFormBuilder({
                 )}
               >
                 <SelectValue placeholder={isLoadingPhases ? "Loading phases..." : "Select phase"} />
-              </SelectTrigger>
-              <SelectContent>
+                </SelectTrigger>
+                <SelectContent>
                 {isLoadingPhases ? (
                   <div className="p-2 text-center">
                     <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
@@ -533,13 +544,13 @@ export function LiveFormBuilder({
                   workflows
                     .find(w => w.id === formData.workflowId)
                     ?.phases.map((phase) => (
-                      <SelectItem key={phase.id} value={phase.id}>
-                        {phase.name}
-                      </SelectItem>
+                    <SelectItem key={phase.id} value={phase.id}>
+                      {phase.name}
+                    </SelectItem>
                     ))
                 )}
-              </SelectContent>
-            </Select>
+                </SelectContent>
+              </Select>
             {errors["phaseId"] && (
               <p className="text-sm text-red-500 mt-1">{errors["phaseId"][0]}</p>
             )}
@@ -549,34 +560,14 @@ export function LiveFormBuilder({
 
       {/* Form Sections */}
       <div className="space-y-4">
-        {formData.schema.sections.map((section, index) => (
+        {formData.sections.map((section, index) => (
           <Card key={section.id} className="p-0 overflow-hidden">
             <div className={cn(
               "flex items-center justify-between p-4 bg-gray-50",
               loadingSections[section.id] && "opacity-50"
             )}>
               <div className="flex items-center gap-2">
-                <Select
-                  value={section.type}
-                  onValueChange={(value: FormSection["type"]) => 
-                    handleSectionChange(section.id, "type", value)
-                  }
-                  disabled={loadingSections[section.id]}
-                >
-                  <SelectTrigger 
-                    className={cn(
-                      "w-[140px]",
-                      errors[`schema.sections.${index}.type`] && "border-red-500"
-                    )}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FORM">Form</SelectItem>
-                    <SelectItem value="CHECKLIST">Checklist</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
+                <Button 
                   variant="ghost"
                   size="icon"
                   onClick={() => handleDeleteSection(section.id)}
@@ -591,41 +582,102 @@ export function LiveFormBuilder({
               </div>
             </div>
 
-            {section.type === "CHECKLIST" ? (
-              <div>
-                <div className="bg-black text-white p-2 text-center font-bold">
-                  <Input
-                    value={section.title}
-                    onChange={(e) => {
-                      handleSectionChange(section.id, "title", e.target.value)
-                      clearError(`schema.sections.${index}.title`)
-                    }}
-                    className={cn(
-                      "bg-transparent border-0 text-center text-white placeholder:text-white/70 focus-visible:ring-0",
-                      errors[`schema.sections.${index}.title`] && "border-red-500"
-                    )}
-                    placeholder="TASKS"
-                  />
-                </div>
-                {section.description && (
-                  <p className="text-sm px-4 py-2">
-                    {section.description}
-                  </p>
+            <div className="p-4">
+              <Input
+                className={cn(
+                  "text-lg font-semibold w-full mb-4",
+                  errors[`schema.sections.${index}.title`] && "border-red-500"
                 )}
-                <div className="border-t border-gray-200">
-                  <div className="border border-black">
-                    {section.items.map((item, itemIndex) => (
-                      <div key={item.id} className="flex border-b border-black last:border-b-0">
-                        <div className="w-12 p-2 border-r border-black text-center font-bold">
-                          {itemIndex + 1}
-                        </div>
-                        <div className="w-12 p-2 border-r border-black flex items-center justify-center">
-                          <div 
-                            className="w-6 h-6 border-2 border-black rounded-full cursor-pointer"
-                          />
-                        </div>
-                        <div className="flex-1 p-2 text-sm flex items-center">
-                          <div className="w-full">
+                value={section.title}
+                onChange={(e) => {
+                  handleSectionChange(section.id, "title", e.target.value)
+                  clearError(`schema.sections.${index}.title`)
+                }}
+                placeholder="Section Title"
+              />
+              <Textarea
+                className={cn(
+                  "mb-4",
+                  errors[`schema.sections.${index}.description`] && "border-red-500"
+                )}
+                placeholder="Section description (optional)"
+                value={section.description || ""}
+                onChange={(e) => {
+                  handleSectionChange(section.id, "description", e.target.value)
+                  clearError(`schema.sections.${index}.description`)
+                }}
+              />
+              {errors[`schema.sections.${index}.description`] && (
+                <p className="text-sm text-red-500 mt-1">
+                  {errors[`schema.sections.${index}.description`][0]}
+                </p>
+              )}
+
+              <div className="space-y-4">
+                {/* Group items by row */}
+                {Array.from(new Set(section.items.map(item => item.layout?.row || 0))).map(row => (
+                  <div key={row} className="flex flex-wrap gap-4">
+                    {section.items
+                      .filter(item => (item.layout?.row || 0) === row)
+                      .map((item, itemIndex) => (
+                        <div 
+                          key={item.id} 
+                          className={cn(
+                            "relative group border rounded-lg p-4",
+                            item.layout?.width === "half" ? "w-[calc(50%-0.5rem)]" : "w-full",
+                            errors[`schema.sections.${index}.items.${itemIndex}`] && "border-red-500"
+                          )}
+                        >
+                          <div className="absolute right-2 top-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleDeleteItem(section.id, item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                              <Select
+                                value={item.type}
+                                onValueChange={(value) => {
+                                  handleItemChange(section.id, item.id, "type", value)
+                                  // Initialize options array for radio, checkbox, select, and checklist
+                                  if (["RADIO", "CHECKBOX", "SELECT", "CHECKLIST"].includes(value) && !item.options) {
+                                    handleItemChange(section.id, item.id, "options", ["Option 1"])
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Select field type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="TEXT">Text</SelectItem>
+                                  <SelectItem value="TEXTAREA">Text Area</SelectItem>
+                                  <SelectItem value="SELECT">Select</SelectItem>
+                                  <SelectItem value="CHECKBOX">Checkbox</SelectItem>
+                                  <SelectItem value="RADIO">Radio</SelectItem>
+                                  <SelectItem value="CHECKLIST">Checklist</SelectItem>
+                                </SelectContent>
+                              </Select>
+
+                              <Select
+                                value={item.layout?.width}
+                                onValueChange={(value) => handleItemChange(section.id, item.id, "layout", { ...item.layout, width: value })}
+                              >
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Select width" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="full">Full Width</SelectItem>
+                                  <SelectItem value="half">Half Width</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
                             <Input
                               value={item.content}
                               onChange={(e) => {
@@ -633,156 +685,233 @@ export function LiveFormBuilder({
                                 clearError(`schema.sections.${index}.items.${itemIndex}.content`)
                               }}
                               className={cn(
-                                "border-0 focus-visible:ring-0 p-0 text-sm",
                                 errors[`schema.sections.${index}.items.${itemIndex}.content`] && "border-red-500"
                               )}
-                              placeholder="Enter task description"
+                              placeholder="Field Label"
                             />
-                            {errors[`schema.sections.${index}.items.${itemIndex}.content`] && (
-                              <p className="text-sm text-red-500 mt-1">
-                                {errors[`schema.sections.${index}.items.${itemIndex}.content`][0]}
-                              </p>
+
+                            {(item.type === "RADIO" || item.type === "CHECKBOX" || item.type === "SELECT" || item.type === "CHECKLIST") && (
+                              <div className="space-y-2">
+                                <Label>Options</Label>
+                                {item.options?.map((option, optionIndex) => (
+                                  <div key={optionIndex} className="flex items-center gap-2">
+                                    <Input
+                                      value={option}
+                                      onChange={(e) => {
+                                        const newOptions = [...(item.options || [])]
+                                        newOptions[optionIndex] = e.target.value
+                                        handleItemChange(section.id, item.id, "options", newOptions)
+                                      }}
+                                      placeholder={`Option ${optionIndex + 1}`}
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const newOptions = [...(item.options || [])]
+                                        newOptions.splice(optionIndex, 1)
+                                        handleItemChange(section.id, item.id, "options", newOptions)
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                                {item.type !== "CHECKLIST" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newOptions = [...(item.options || []), ""]
+                                      handleItemChange(section.id, item.id, "options", newOptions)
+                                    }}
+                                  >
+                                    <PlusCircle className="h-4 w-4 mr-2" />
+                                    Add Option
+                                  </Button>
+                                )}
+                              </div>
                             )}
+
+                            {item.type === "TEXTAREA" && (
+                              <Select
+                                value={item.size}
+                                onValueChange={(value) => handleItemChange(section.id, item.id, "size", value)}
+                              >
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue placeholder="Select size" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="small">Small</SelectItem>
+                                  <SelectItem value="normal">Normal</SelectItem>
+                                  <SelectItem value="large">Large</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+
+                            {/* Preview Section */}
+                            <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                              <Label>{item.content || "Field Preview"}</Label>
+                              {item.type === "TEXT" && (
+                                <Input disabled placeholder="Text input" />
+                              )}
+                              {item.type === "TEXTAREA" && (
+                                <Textarea 
+                                  disabled 
+                                  placeholder="Text area input" 
+                                  className={cn(
+                                    item.size === "small" && "h-20",
+                                    item.size === "normal" && "h-32",
+                                    item.size === "large" && "h-48"
+                                  )}
+                                />
+                              )}
+                              {item.type === "CHECKLIST" && (
+                                <div>
+                                  <div className="bg-black text-white p-2 text-center font-bold">
+                                    TASKS
+                                  </div>
+                                  <div className="border border-black">
+                                    {item.options?.map((option, optionIndex) => (
+                                      <div key={optionIndex} className="flex border-b border-black last:border-b-0">
+                                        <div className="w-12 p-2 border-r border-black text-center font-bold">
+                                          {optionIndex + 1}
+                                        </div>
+                                        <div className="w-12 p-2 border-r border-black flex items-center justify-center">
+                                          <div className="w-6 h-6 border-2 border-black rounded-full cursor-pointer" />
+                                        </div>
+                                        <div className="flex-1 p-2 text-sm flex items-center">
+                                          <Input
+                                            value={option}
+                                            onChange={(e) => {
+                                              const newOptions = [...(item.options || [])]
+                                              newOptions[optionIndex] = e.target.value
+                                              handleItemChange(section.id, item.id, "options", newOptions)
+                                            }}
+                                            className="border-0 focus-visible:ring-0 p-0 text-sm"
+                                            placeholder="Enter task description"
+                                          />
+                                        </div>
+                                        <div className="p-2 flex items-center">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                              const newOptions = [...(item.options || [])]
+                                              newOptions.splice(optionIndex, 1)
+                                              handleItemChange(section.id, item.id, "options", newOptions)
+                                            }}
+                                            className="h-6 w-6"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="p-4">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newOptions = [...(item.options || []), ""]
+                                        handleItemChange(section.id, item.id, "options", newOptions)
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <PlusCircle className="h-4 w-4 mr-2" />
+                                      Add Task
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              {item.type === "RADIO" && (
+                                <div className="space-y-2">
+                                  {item.options?.map((option, optionIndex) => (
+                                    <div key={optionIndex} className="flex items-center gap-2">
+                                      <RadioGroup disabled value={option}>
+                                        <div className="flex items-center space-x-2">
+                                          <RadioGroupItem value={option} id={`radio-${item.id}-${optionIndex}`} />
+                                          <Label htmlFor={`radio-${item.id}-${optionIndex}`}>{option}</Label>
+                                        </div>
+                                      </RadioGroup>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {item.type === "CHECKBOX" && (
+                                <div className="space-y-2">
+                                  {item.options?.map((option, optionIndex) => (
+                                    <div key={optionIndex} className="flex items-center space-x-2">
+                                      <Checkbox id={`checkbox-${item.id}-${optionIndex}`} disabled />
+                                      <Label htmlFor={`checkbox-${item.id}-${optionIndex}`}>{option}</Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {item.type === "SELECT" && (
+                                <Select disabled>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select an option" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {item.options?.map((option, optionIndex) => (
+                                      <SelectItem key={optionIndex} value={option}>
+                                        {option}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="p-2 flex items-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteItem(section.id, item.id)}
-                            className="h-6 w-6"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
-                  <div className="p-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddChecklistItem(section.id)}
-                      className="w-full"
-                    >
-                      <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Task
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4">
-                <Input
-                  className={cn(
-                    "text-lg font-semibold w-full mb-4",
-                    errors[`schema.sections.${index}.title`] && "border-red-500"
-                  )}
-                  value={section.title}
-                  onChange={(e) => {
-                    handleSectionChange(section.id, "title", e.target.value)
-                    clearError(`schema.sections.${index}.title`)
-                  }}
-                  placeholder="Section Title"
-                />
-                <Textarea
-                  className={cn(
-                    "mb-4",
-                    errors[`schema.sections.${index}.description`] && "border-red-500"
-                  )}
-                  placeholder="Section description (optional)"
-                  value={section.description || ""}
-                  onChange={(e) => {
-                    handleSectionChange(section.id, "description", e.target.value)
-                    clearError(`schema.sections.${index}.description`)
-                  }}
-                />
-                {errors[`schema.sections.${index}.description`] && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors[`schema.sections.${index}.description`][0]}
-                  </p>
-                )}
-                <div className="space-y-4">
-                  {section.items.map((item, itemIndex) => (
-                    <div key={item.id} className="flex items-start gap-4">
-                      <div className="flex-1">
-                        <Input
-                          value={item.content}
-                          onChange={(e) => {
-                            handleItemChange(section.id, item.id, "content", e.target.value)
-                            clearError(`schema.sections.${index}.items.${itemIndex}.content`)
-                          }}
-                          className={cn(
-                            errors[`schema.sections.${index}.items.${itemIndex}.content`] && "border-red-500"
-                          )}
-                        />
-                        {errors[`schema.sections.${index}.items.${itemIndex}.content`] && (
-                          <p className="text-sm text-red-500 mt-1">
-                            {errors[`schema.sections.${index}.items.${itemIndex}.content`][0]}
-                          </p>
-                        )}
-                      </div>
-                      <Select
-                        value={item.type}
-                        onValueChange={(value: FormItem["type"]) => {
-                          handleItemChange(section.id, item.id, "type", value)
-                          clearError(`schema.sections.${index}.items.${itemIndex}.type`)
-                        }}
-                      >
-                        <SelectTrigger 
-                          className={cn(
-                            "w-[140px]",
-                            errors[`schema.sections.${index}.items.${itemIndex}.type`] && "border-red-500"
-                          )}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="TEXT">Text</SelectItem>
-                          <SelectItem value="TEXTAREA">Text Area</SelectItem>
-                          <SelectItem value="SELECT">Select</SelectItem>
-                          <SelectItem value="CHECKBOX">Checkbox</SelectItem>
-                          <SelectItem value="RADIO">Radio</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {errors[`schema.sections.${index}.items.${itemIndex}.type`] && (
-                        <p className="text-sm text-red-500 mt-1">
-                          {errors[`schema.sections.${index}.items.${itemIndex}.type`][0]}
-                        </p>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteItem(section.id, item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                ))}
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleAddItem(section.id)}
-                    className="w-full"
+                    className="flex-1"
                   >
                     <PlusCircle className="h-4 w-4 mr-2" />
-                    Add Item
+                    Add Field
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const lastRow = Math.max(...section.items.map(item => item.layout?.row || 0))
+                      handleAddItem(section.id)
+                      // Force new row by updating layout
+                      const newItem = section.items[section.items.length - 1]
+                      if (newItem) {
+                        handleItemChange(section.id, newItem.id, "layout", {
+                          width: "full",
+                          row: lastRow + 1
+                        })
+                      }
+                    }}
+                  >
+                    New Row
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </Card>
         ))}
       </div>
 
       <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
+            <Button
+              variant="outline"
           onClick={handleAddSection}
-        >
+            >
           <PlusCircle className="h-4 w-4 mr-2" />
           Add Section
-        </Button>
+            </Button>
         <Button
           onClick={handleSave}
           disabled={isSaving}
@@ -791,7 +920,7 @@ export function LiveFormBuilder({
           {isSaving && (
             <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            </div>
+          </div>
           )}
           {isSaving ? "Saving..." : "Save Form"}
         </Button>

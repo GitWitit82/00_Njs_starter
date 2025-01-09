@@ -8,7 +8,6 @@ import { authOptions } from "@/lib/auth"
 const formTemplateSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
-  type: z.enum(["CHECKLIST", "FORM", "CUSTOM"]),
   departmentId: z.string().optional(),
   phaseId: z.string(),
   schema: z.any(),
@@ -115,7 +114,6 @@ export async function PUT(req: Request, { params }: RouteParams) {
       data: {
         name: body.name,
         description: body.description,
-        type: body.type,
         departmentId: body.departmentId,
         workflowId: body.workflowId,
         phaseId: body.phaseId,

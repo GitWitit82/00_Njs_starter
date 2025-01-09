@@ -1,14 +1,21 @@
 import { z } from "zod"
 
+const formItemLayoutSchema = z.object({
+  width: z.enum(["full", "half", "third"]),
+  row: z.number()
+})
+
 /**
  * Form item schema for both form fields and checklist items
  */
 export const formItemSchema = z.object({
   id: z.string(),
-  content: z.string().min(1, "Content is required"),
-  type: z.enum(["TEXT", "TEXTAREA", "SELECT", "CHECKBOX", "RADIO"]),
+  content: z.string(),
+  type: z.enum(["TEXT", "TEXTAREA", "SELECT", "CHECKBOX", "RADIO", "CHECKLIST"]),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
+  size: z.enum(["small", "normal", "large"]).optional(),
+  layout: formItemLayoutSchema
 })
 
 /**
@@ -16,10 +23,9 @@ export const formItemSchema = z.object({
  */
 export const formSectionSchema = z.object({
   id: z.string(),
-  title: z.string().min(1, "Title is required"),
-  type: z.enum(["FORM", "CHECKLIST"]),
+  title: z.string(),
   description: z.string().optional(),
-  items: z.array(formItemSchema),
+  items: z.array(formItemSchema)
 })
 
 export const formSchemaSchema = z.object({
@@ -31,19 +37,20 @@ export const formSchemaSchema = z.object({
  */
 export const formTemplateSchema = z.object({
   id: z.string(),
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   departmentId: z.string().optional(),
   workflowId: z.string().optional(),
   phaseId: z.string().optional(),
-  schema: formSchemaSchema,
-  isActive: z.boolean().optional(),
+  sections: z.array(formSectionSchema),
+  isActive: z.boolean(),
   userId: z.string(),
   createdAt: z.date(),
-  updatedAt: z.date(),
+  updatedAt: z.date()
 })
 
 export type FormItem = z.infer<typeof formItemSchema>
 export type FormSection = z.infer<typeof formSectionSchema>
 export type FormSchema = z.infer<typeof formSchemaSchema>
-export type FormTemplate = z.infer<typeof formTemplateSchema> 
+export type FormTemplate = z.infer<typeof formTemplateSchema>
+export type FormItemLayout = z.infer<typeof formItemLayoutSchema> 
