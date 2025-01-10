@@ -5,9 +5,9 @@ import { Department, FormTemplate, Workflow } from "@prisma/client"
 import { notFound } from "next/navigation"
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 interface FormTemplateWithRelations extends FormTemplate {
@@ -21,7 +21,8 @@ interface FormTemplateWithRelations extends FormTemplate {
 export default async function FormPreviewPage({
   params,
 }: PageProps) {
-  const { id } = params
+  // Await the params
+  const { id } = await params
 
   // Fetch template with relations
   const template = await db.formTemplate.findUnique({
@@ -36,6 +37,11 @@ export default async function FormPreviewPage({
     notFound()
   }
 
+  // Fetch departments for the preview
+  const departments = await db.department.findMany({
+    orderBy: { name: "asc" },
+  })
+
   return (
     <div className="container py-6">
       <div className="mb-6">
@@ -45,7 +51,7 @@ export default async function FormPreviewPage({
         )}
       </div>
       <Suspense fallback={<div>Loading preview...</div>}>
-        <FormPreview template={template} />
+        <FormPreview template={template} departments={departments} />
       </Suspense>
     </div>
   )

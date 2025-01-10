@@ -1,34 +1,27 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider"
-import { Sidebar } from "@/components/sidebar"
-import { SessionProvider } from "@/components/session-provider"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { Toaster } from "sonner"
-import Breadcrumbs from "@/components/ui/breadcrumbs"
+import { AppSidebar } from "@/components/AppSidebar";
+import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
+import { SessionProvider } from "next-auth/react";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Workflow PMS",
-  description: "Workflow and Project Management System",
+  description: "Project Management System with Workflow and Form Management",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const session = await getServerSession(authOptions)
-
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} antialiased`}>
+      <body className={cn(inter.className, "min-h-screen bg-background antialiased")}>
         <SessionProvider>
           <ThemeProvider
             attribute="class"
@@ -36,20 +29,17 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <div className="flex min-h-screen">
-              {session && (
-                <div className="w-64 flex-shrink-0">
-                  <Sidebar />
+            <div className="relative flex min-h-screen">
+              <AppSidebar />
+              <main className="flex-1 overflow-y-auto">
+                <div className="container mx-auto p-6">
+                  {children}
                 </div>
-              )}
-              <main className={session ? "flex-1 px-8 py-6 bg-background" : "w-full"}>
-                {session && <Breadcrumbs />}
-                {children}
               </main>
             </div>
+            <Toaster />
           </ThemeProvider>
         </SessionProvider>
-        <Toaster />
       </body>
     </html>
   );

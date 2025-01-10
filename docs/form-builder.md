@@ -102,12 +102,54 @@ Sections are managed through an accordion interface:
 - `CHECKLIST`: Numbered task list with completion circles
 
 ### Checklist Features
-- Black header with "TASKS" label
-- Numbered tasks
-- Completion circles
-- Bordered layout
-- Direct task editing
-- Add/remove task functionality
+The checklist field type provides a structured task list with the following features:
+- Fixed black header with "TASKS" label in white text
+- Sequential numbered tasks (1, 2, 3, etc.)
+- Circular completion indicators
+- Clean bordered layout with consistent spacing
+- Task content with proper text sizing
+- Automatic numbering and layout management
+
+### Checklist Styling
+```typescript
+interface ChecklistStyle {
+  header: {
+    background: "black";    // Fixed black background
+    color: "white";         // White text
+    padding: "0.5rem";      // Consistent padding
+    textAlign: "center";    // Centered text
+    fontWeight: "bold";     // Bold text
+  };
+  task: {
+    border: "1px solid black";
+    numberWidth: "3rem";    // Fixed width for numbers
+    circleSize: "1.5rem";   // Consistent circle size
+    padding: "0.5rem";      // Consistent padding
+  };
+}
+```
+
+### Checklist Example
+```tsx
+<div className="border border-black">
+  <div className="bg-black text-white p-2 text-center font-bold">
+    TASKS
+  </div>
+  {tasks.map((task, index) => (
+    <div className="flex border-b border-black last:border-b-0">
+      <div className="w-12 p-2 border-r border-black text-center font-bold">
+        {index + 1}
+      </div>
+      <div className="w-12 p-2 border-r border-black flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-black rounded-full" />
+      </div>
+      <div className="flex-1 p-2 text-sm">
+        {task}
+      </div>
+    </div>
+  ))}
+</div>
+```
 
 ### Field Properties
 ```typescript

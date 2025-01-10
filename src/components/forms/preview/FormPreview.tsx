@@ -12,45 +12,27 @@ interface FormPreviewProps {
     department: Department | null
     workflow: Workflow | null
   }
+  departments: Department[]
 }
 
 /**
  * Form preview component
  * Displays a read-only version of the form template
  */
-export function FormPreview({ template }: FormPreviewProps) {
+export function FormPreview({ template, departments }: FormPreviewProps) {
   const router = useRouter()
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <div className="flex items-center gap-2">
-            {template.department && (
-              <Badge variant="outline" className="border-2" style={{ borderColor: template.department.color }}>
-                {template.department.name}
-              </Badge>
-            )}
-            <Badge variant="secondary">
-              {template.type}
-            </Badge>
-          </div>
-        </div>
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => router.push(`/forms/templates/${template.id}`)}
-        >
-          Edit Template
-        </Button>
+      {/* Form Header */}
+      <div 
+        className="p-6 rounded-lg"
+        style={{ backgroundColor: template.department?.color || "#e5e7eb" }}
+      >
+        <h2 className="text-2xl font-bold text-black">{template.name}</h2>
+        {template.description && (
+          <p className="mt-2 text-black/80">{template.description}</p>
+        )}
       </div>
 
       <Card className="p-6">
@@ -65,25 +47,49 @@ export function FormPreview({ template }: FormPreviewProps) {
             <div className="space-y-4">
               {section.items?.map((item: any, itemIndex: number) => (
                 <div key={item.id || itemIndex} className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <label className="text-sm font-medium">
-                      {item.content}
-                      {item.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                  </div>
-                  {item.type === 'TEXT' && (
-                    <div className="h-10 bg-muted rounded-md" />
-                  )}
-                  {item.type === 'TEXTAREA' && (
-                    <div className="h-24 bg-muted rounded-md" />
-                  )}
-                  {item.type === 'SELECT' && item.options && (
-                    <div className="h-10 bg-muted rounded-md" />
-                  )}
-                  {item.type === 'CHECKBOX' && (
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 bg-muted rounded" />
+                  {item.type === 'CHECKLIST' && item.options && (
+                    <div className="border border-black">
+                      <div className="bg-black text-white p-2 text-center font-bold">
+                        TASKS
+                      </div>
+                      {item.options.map((task: string, taskIndex: number) => (
+                        <div key={taskIndex} className="flex border-b border-black last:border-b-0">
+                          <div className="w-12 p-2 border-r border-black text-center font-bold">
+                            {taskIndex + 1}
+                          </div>
+                          <div className="w-12 p-2 border-r border-black flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-black rounded-full" />
+                          </div>
+                          <div className="flex-1 p-2 text-sm">
+                            {task}
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                  {item.type !== 'CHECKLIST' && (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <label className="text-sm font-medium">
+                          {item.content}
+                          {item.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                      </div>
+                      {item.type === 'TEXT' && (
+                        <div className="h-10 bg-muted rounded-md" />
+                      )}
+                      {item.type === 'TEXTAREA' && (
+                        <div className="h-24 bg-muted rounded-md" />
+                      )}
+                      {item.type === 'SELECT' && item.options && (
+                        <div className="h-10 bg-muted rounded-md" />
+                      )}
+                      {item.type === 'CHECKBOX' && (
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-5 bg-muted rounded" />
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ))}

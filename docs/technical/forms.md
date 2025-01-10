@@ -4,20 +4,82 @@
 
 ### Component Structure
 ```
-src/app/forms/
-├── page.tsx                 # Main forms page
-├── templates/
-│   ├── page.tsx            # Templates listing page
-│   ├── [id]/
-│   │   └── page.tsx        # Template detail/edit page
-├── instances/
-│   ├── page.tsx            # Instances listing page
-│   └── [instanceId]/
-│       └── page.tsx        # Instance detail page
-└── components/
-    ├── FormBuilder.tsx     # Form template builder
-    ├── FormInstance.tsx    # Form instance viewer
-    └── StatusManager.tsx   # Status management
+src/components/forms/
+├── builder/
+│   ├── LiveFormBuilder.tsx   # Form template builder with live preview
+│   └── FormPreview.tsx       # Preview component for builder
+├── preview/
+│   └── FormPreview.tsx       # Standalone preview component
+└── templates/
+    └── StandardChecklist.tsx # Checklist template component
+```
+
+### Form Template Schema
+```typescript
+interface FormTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  departmentId: string;
+  workflowId?: string;
+  phaseId?: string;
+  schema: {
+    sections: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      items: Array<{
+        id: string;
+        type: "TEXT" | "TEXTAREA" | "SELECT" | "CHECKBOX" | "RADIO" | "CHECKLIST";
+        content: string;
+        required?: boolean;
+        options?: string[];
+        style?: {
+          headerColor?: string;  // For department color in form header
+        };
+      }>;
+    }>;
+  };
+}
+```
+
+### Department Integration
+The form system integrates with departments in two ways:
+1. Form Header: Uses department color for visual identification
+2. Form Template Association: Links templates to specific departments
+
+```typescript
+interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;  // Hex color code for department branding
+}
+```
+
+### Checklist Implementation
+The checklist component maintains consistent styling:
+- Fixed black header with white text
+- Numbered tasks with completion circles
+- Clean bordered layout
+- Proper spacing and alignment
+
+```typescript
+interface ChecklistItem {
+  type: "CHECKLIST";
+  options: string[];  // Task list items
+  style: {
+    header: {
+      background: "black";
+      color: "white";
+    };
+    task: {
+      border: string;
+      numberWidth: string;
+      circleSize: string;
+    };
+  };
+}
 ```
 
 ## Database Schema

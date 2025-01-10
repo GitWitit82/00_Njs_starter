@@ -165,7 +165,10 @@ export function StandardChecklist({
       onDataChange={onDataChange}
     >
       <div className="mt-6">
-        <div className="bg-black text-white p-2 text-center font-bold">
+        <div 
+          className="text-white p-2 text-center font-bold"
+          style={{ backgroundColor: departmentColor || "#000000" }}
+        >
           TASKS
         </div>
 
