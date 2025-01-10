@@ -1,6 +1,6 @@
 # Workflow PMS (Project Management System)
 
-A modern project management system built with Next.js 13, featuring workflows, phases, tasks, and dynamic form management with version control.
+A modern project management system built with Next.js 13, featuring workflows, phases, tasks, and dynamic form management with version control. Specialized for vehicle wrap workflow management with multiple visualization options.
 
 ## Features
 
@@ -8,18 +8,31 @@ A modern project management system built with Next.js 13, featuring workflows, p
 - Next-Auth integration with role-based access control
 - Protected routes and API endpoints
 - Secure session management
+- Department-based access control
 
 ### Project Management
-- Create and manage projects
+- Create and manage projects with streamlined workflow integration
 - Assign project managers and team members
-- Track project progress and status
+- Track project progress and status in real-time
 - Link projects to workflows and phases
+- Multiple layout options for project visualization:
+  - Card-Based Layout: Clean, modern interface for quick project overview
+  - Split Panel Layout: Detailed project information with task tracking
+  - Kanban Board: Visual task management with status tracking
+- Automated form association based on workflow selection
+- Progress tracking with visual indicators
+- Department-specific project views
 
 ### Workflow Management
 - Create custom workflows with multiple phases
 - Define tasks within each phase
 - Track task completion and dependencies
 - Assign tasks to team members
+- Visual progress tracking
+- Department-based task organization
+- Automated task creation from workflow templates
+- Real-time status updates
+- Task priority management
 
 ### Dynamic Forms
 - Create custom form templates
@@ -30,14 +43,22 @@ A modern project management system built with Next.js 13, featuring workflows, p
 - Version control and history tracking
 - Version comparison and restoration
 - Form response version tracking
+- Automated form assignment based on workflow
+- Form completion tracking
 
 ### User Interface
 - Modern and responsive design with TailwindCSS
+- Three distinct layout options for project management:
+  - Card-Based Layout: Mobile-friendly, clean interface
+  - Split Panel Layout: Efficient side-by-side project details
+  - Kanban Board: Drag-and-drop task management
 - Server and client components optimization
 - Loading states and error handling
 - Toast notifications for user feedback
 - Drag-and-drop functionality
 - Version comparison interface
+- Real-time progress indicators
+- Status tracking visualization
 
 ## Tech Stack
 

@@ -20,6 +20,10 @@ import {
   ClipboardIcon,
   Menu,
   PanelLeftClose,
+  LayoutTemplate,
+  Columns,
+  LayoutGrid,
+  Trello,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -61,6 +65,32 @@ export function AppSidebar() {
       icon: LayoutDashboard,
       title: "Dashboard",
       label: "Dashboard",
+    },
+    {
+      href: "/demo-layouts",
+      icon: LayoutTemplate,
+      title: "Demo Layouts",
+      label: "Demo Layouts",
+      subroutes: [
+        {
+          href: "/demo-layouts/card-based",
+          icon: LayoutGrid,
+          title: "Card-Based Layout",
+          label: "Card-Based Layout",
+        },
+        {
+          href: "/demo-layouts/split-panel",
+          icon: Columns,
+          title: "Split Panel Layout",
+          label: "Split Panel Layout",
+        },
+        {
+          href: "/demo-layouts/kanban",
+          icon: Trello,
+          title: "Kanban Board",
+          label: "Kanban Board",
+        },
+      ],
     },
     {
       href: "/projects",

@@ -5,6 +5,10 @@ import * as SeparatorPrimitive from "@radix-ui/react-separator"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Separator component built on top of Radix UI Separator primitive
+ * Visually or semantically separates content
+ */
 const Separator = React.forwardRef<
   React.ElementRef<typeof SeparatorPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>

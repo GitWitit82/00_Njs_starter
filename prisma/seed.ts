@@ -31,292 +31,6 @@ type DepartmentMapping = {
   [key: string]: string | undefined
 }
 
-async function seedFormStatusTracking() {
-  const admin = await prisma.user.findFirst({
-    where: { role: "ADMIN" }
-  })
-
-  if (!admin) throw new Error("Admin user not found")
-
-  // Create a test workflow for forms
-  const formWorkflow = await prisma.workflow.create({
-    data: {
-      name: "Form Testing Workflow",
-      description: "Workflow for testing form dependencies and status tracking"
-    }
-  })
-
-  // Create phases for the workflow
-  const phases = await Promise.all([
-    prisma.phase.create({
-      data: {
-        name: "Initial Review",
-        description: "First phase of form review",
-        order: 1,
-        workflowId: formWorkflow.id
-      }
-    }),
-    prisma.phase.create({
-      data: {
-        name: "Detailed Assessment",
-        description: "Detailed form assessment phase",
-        order: 2,
-        workflowId: formWorkflow.id
-      }
-    }),
-    prisma.phase.create({
-      data: {
-        name: "Final Approval",
-        description: "Final approval phase",
-        order: 3,
-        workflowId: formWorkflow.id
-      }
-    })
-  ])
-
-  // Create a series of dependent form templates
-  const formTemplates = await Promise.all([
-    // Initial Assessment Form
-    prisma.formTemplate.create({
-      data: {
-        name: "Initial Assessment Form",
-        description: "Must be completed first",
-        workflowId: formWorkflow.id,
-        phaseId: phases[0].id,
-        schema: { sections: [] },
-        priority: FormPriority.CRITICAL,
-        isActive: true,
-        currentVersion: 1,
-        versions: {
-          create: {
-            version: 1,
-            schema: { sections: [] },
-            isActive: true,
-            createdById: admin.id,
-            changelog: "Initial version"
-          }
-        }
-      }
-    }),
-    // Detailed Review Form
-    prisma.formTemplate.create({
-      data: {
-        name: "Detailed Review Form",
-        description: "Depends on Initial Assessment",
-        workflowId: formWorkflow.id,
-        phaseId: phases[1].id,
-        schema: { sections: [] },
-        priority: FormPriority.STANDARD,
-        isActive: true,
-        currentVersion: 1,
-        versions: {
-          create: {
-            version: 1,
-            schema: { sections: [] },
-            isActive: true,
-            createdById: admin.id,
-            changelog: "Initial version"
-          }
-        }
-      }
-    }),
-    // Final Approval Form
-    prisma.formTemplate.create({
-      data: {
-        name: "Final Approval Form",
-        description: "Requires all previous forms to be completed",
-        workflowId: formWorkflow.id,
-        phaseId: phases[2].id,
-        schema: { sections: [] },
-        priority: FormPriority.CRITICAL,
-        isActive: true,
-        currentVersion: 1,
-        versions: {
-          create: {
-            version: 1,
-            schema: { sections: [] },
-            isActive: true,
-            createdById: admin.id,
-            changelog: "Initial version"
-          }
-        }
-      }
-    })
-  ])
-
-  // Create completion requirements with dependencies
-  const requirements = await Promise.all([
-    // Initial Assessment Requirement (no dependencies)
-    prisma.formCompletionRequirement.create({
-      data: {
-        templateId: formTemplates[0].id,
-        phaseId: phases[0].id,
-        isRequired: true,
-        requiredForPhase: true,
-        requiredForTask: true,
-        completionOrder: 1
-      }
-    })
-  ])
-
-  // Add Detailed Review Requirement (depends on Initial Assessment)
-  await prisma.formCompletionRequirement.create({
-    data: {
-      templateId: formTemplates[1].id,
-      phaseId: phases[1].id,
-      isRequired: true,
-      requiredForPhase: true,
-      requiredForTask: true,
-      completionOrder: 2
-    }
-  })
-
-  // Add Final Approval Requirement (depends on both previous forms)
-  await prisma.formCompletionRequirement.create({
-    data: {
-      templateId: formTemplates[2].id,
-      phaseId: phases[2].id,
-      isRequired: true,
-      requiredForPhase: true,
-      requiredForTask: true,
-      completionOrder: 3
-    }
-  })
-
-  // Create a test project
-  const project = await prisma.project.create({
-    data: {
-      name: "Form Testing Project",
-      description: "Project for testing form status tracking",
-      status: "PLANNING",
-      startDate: new Date(),
-      workflowId: formWorkflow.id,
-      managerId: admin.id
-    }
-  })
-
-  // Create project phases
-  const projectPhases = await Promise.all(
-    phases.map(phase =>
-      prisma.projectPhase.create({
-        data: {
-          name: phase.name,
-          description: phase.description,
-          order: phase.order,
-          projectId: project.id,
-          phaseId: phase.id,
-        }
-      })
-    )
-  )
-
-  // Create a test task for each phase
-  const projectTasks = await Promise.all(
-    projectPhases.map((projectPhase, index) =>
-      prisma.projectTask.create({
-        data: {
-          name: `Test Task ${index + 1}`,
-          description: `Test task for ${projectPhase.name}`,
-          priority: Priority.MEDIUM,
-          status: "NOT_STARTED",
-          manHours: 2,
-          order: 1,
-          projectPhaseId: projectPhase.id,
-          assignedToId: admin.id
-        }
-      })
-    )
-  )
-
-  // Create form instances for the project
-  const formVersions = await Promise.all(
-    formTemplates.map(template =>
-      prisma.formVersion.findFirst({
-        where: {
-          templateId: template.id,
-          version: 1
-        }
-      })
-    )
-  )
-
-  const instances = await Promise.all(
-    formTemplates.map((template, index) => {
-      const version = formVersions[index]
-      if (!version) throw new Error(`Version not found for template ${template.id}`)
-
-      return prisma.formInstance.create({
-        data: {
-          templateId: template.id,
-          versionId: version.id,
-          projectId: project.id,
-          projectTaskId: projectTasks[index].id,
-          status: "ACTIVE"
-        }
-      })
-    })
-  )
-
-  // Create status history for the first instance
-  const statusHistory = [
-    {
-      status: "ACTIVE",
-      comments: "Form instance created",
-      metadata: { initialCreation: true }
-    },
-    {
-      status: "IN_PROGRESS",
-      comments: "Started working on form",
-      metadata: { startedBy: admin.id }
-    },
-    {
-      status: "ON_HOLD",
-      comments: "Waiting for additional information",
-      metadata: { reason: "Missing client input" }
-    },
-    {
-      status: "IN_PROGRESS",
-      comments: "Resumed work after receiving information",
-      metadata: { resumedBy: admin.id }
-    },
-    {
-      status: "PENDING_REVIEW",
-      comments: "Ready for review",
-      metadata: { completionPercentage: 100 }
-    },
-    {
-      status: "COMPLETED",
-      comments: "Form approved and completed",
-      metadata: { approvedBy: admin.id }
-    }
-  ]
-
-  // Create status history entries with delays
-  for (const status of statusHistory) {
-    await prisma.formStatusHistory.create({
-      data: {
-        instanceId: instances[0].id,
-        status: status.status as any,
-        changedById: admin.id,
-        comments: status.comments,
-        metadata: status.metadata,
-        changedAt: new Date()
-      }
-    })
-
-    // Update the instance status
-    await prisma.formInstance.update({
-      where: { id: instances[0].id },
-      data: { status: status.status as any }
-    })
-
-    // Add a small delay between status changes
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
-
-  console.log("Form status tracking seed data created successfully")
-}
-
 // Department seed data
 const departmentData = [
   {
@@ -449,103 +163,75 @@ const workflowData: WorkflowData = {
         { name: 'Specialty Paint/ Texture/ Bedliner', description: 'Paint process', order: 41, priority: "HIGH", manHours: 4 },
         { name: 'Removal of Masking', description: 'Paint process', order: 42, priority: "MEDIUM", manHours: 1 }
       ]
-    },
-    {
-      name: "Installation",
-      description: "Final installation phase",
-      order: 7,
-      tasks: [
-        { name: 'Dry Hang and Photos', description: 'Installation process', order: 43, priority: "HIGH", manHours: 2 },
-        { name: 'Install', description: 'Installation process', order: 44, priority: "CRITICAL", manHours: 8 },
-        { name: 'Post Wrap', description: 'Installation process', order: 45, priority: "HIGH", manHours: 2 },
-        { name: 'QC and Photos', description: 'Installation process', order: 46, priority: "HIGH", manHours: 1 },
-        { name: '$$$ Balance', description: 'Installation process', order: 47, priority: "CRITICAL", manHours: 1 },
-        { name: 'Reveal', description: 'Installation process', order: 48, priority: "HIGH", manHours: 1 },
-        { name: 'Debrief all Depts', description: 'Installation process', order: 49, priority: "MEDIUM", manHours: 1 },
-        { name: 'Close Project', description: 'Installation process', order: 50, priority: "HIGH", manHours: 1 }
-      ]
     }
   ]
 }
 
-async function createChecklistTemplate(
-  workflow: any,
-  phase: any,
-  department: any,
-  admin: any,
-  title: string,
-  items: string[]
-) {
-  return prisma.formTemplate.create({
+async function main() {
+  // Create admin user
+  const hashedPassword = await hash("password123", 12)
+  const adminUser = await prisma.user.create({
     data: {
-      name: title,
-      description: `Checklist for ${title}`,
-      workflowId: workflow.id,
-      phaseId: phase.id,
-      departmentId: department?.id,
-      priority: FormPriority.STANDARD,
-      isActive: true,
-      currentVersion: 1,
-      schema: {
-        sections: [
-          {
-            id: crypto.randomUUID(),
-            title: title,
-            description: "",
-            items: [
-              {
-                id: crypto.randomUUID(),
-                content: title,
-                type: "CHECKLIST",
-                required: true,
-                options: items,
-                layout: {
-                  width: "full",
-                  row: 0
-                },
-                style: {
-                  headerColor: department?.color || "#000000"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      versions: {
-        create: {
-          version: 1,
-          schema: {
-            sections: [
-              {
-                id: crypto.randomUUID(),
-                title: title,
-                description: "",
-                items: [
-                  {
-                    id: crypto.randomUUID(),
-                    content: title,
-                    type: "CHECKLIST",
-                    required: true,
-                    options: items,
-                    layout: {
-                      width: "full",
-                      row: 0
-                    },
-                    style: {
-                      headerColor: department?.color || "#000000"
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          isActive: true,
-          createdById: admin.id,
-          changelog: "Initial version"
-        }
-      }
-    }
+      name: "Admin User",
+      email: "admin@example.com",
+      hashedPassword,
+      role: "ADMIN",
+    },
   })
+
+  // Create departments
+  const departments = await Promise.all(
+    departmentData.map(dept =>
+      prisma.department.create({
+        data: dept
+      })
+    )
+  )
+
+  // Create department mapping for easy lookup
+  const departmentMapping: DepartmentMapping = departments.reduce((acc, dept) => ({
+    ...acc,
+    [dept.name]: dept.id
+  }), {})
+
+  // Create workflow
+  const workflow = await prisma.workflow.create({
+    data: {
+      name: workflowData.name,
+      description: workflowData.description,
+    },
+  })
+
+  // Create phases and tasks
+  for (const phaseData of workflowData.phases) {
+    const phase = await prisma.phase.create({
+      data: {
+        name: phaseData.name,
+        description: phaseData.description,
+        order: phaseData.order,
+        workflowId: workflow.id,
+      },
+    })
+
+    // Create tasks for the phase
+    await Promise.all(
+      phaseData.tasks.map(taskData =>
+        prisma.workflowTask.create({
+          data: {
+            name: taskData.name,
+            description: taskData.description,
+            order: taskData.order,
+            priority: taskData.priority as Priority,
+            manHours: taskData.manHours,
+            phaseId: phase.id,
+          },
+        })
+      )
+    )
+  }
+
+  // Create checklist templates
+  await seedChecklistTemplates()
 }
 
 async function seedChecklistTemplates() {
@@ -733,138 +419,92 @@ async function seedChecklistTemplates() {
       "Confirm COMPLETE panel inventory and package/cart project for installation; CHECKLIST"
     ]
   )
-
-  // Create Plotting Checklist
-  await createChecklistTemplate(
-    workflow,
-    productionPhase,
-    productionDepartment,
-    admin,
-    "PLOTTING CHECKLIST",
-    [
-      "In Onyx Cutter Control, Made sure that CutContour Layer is set to 'Manual/Device Settings'",
-      "Sent data from Print Computer to Plotter using Cutter Control",
-      "Launched Barcode Server On Summa Cutter Control on plotter computer and made sure cut file was sent",
-      "Confirmed Pinch Rollers were properly placed at the ends of vinyl with enough room between them and OPOS marks",
-      "Confirmed vinyl is straight using lines on plotter (Run vinyl through plotter to check for skew on long runs)",
-      "Ran pressure tests starting at 60 to determine proper pressure necessary to cut vinyl that was loaded",
-      "Placed Cutting tool centered and approximately 1 inch under barcode",
-      "Confirm COMPLETE plot inventory and package/cart project for installation; CHECKLIST"
-    ]
-  )
-
-  console.log("Created checklist templates")
 }
 
-async function main() {
-  // Clean up existing data
-  await prisma.userPreference.deleteMany()
-  await prisma.projectTask.deleteMany()
-  await prisma.projectPhase.deleteMany()
-  await prisma.project.deleteMany()
-  await prisma.workflowTask.deleteMany()
-  await prisma.phase.deleteMany()
-  await prisma.workflow.deleteMany()
-  await prisma.department.deleteMany()
-  await prisma.user.deleteMany()
+async function createChecklistTemplate(
+  workflow: any,
+  phase: any,
+  department: any,
+  admin: any,
+  name: string,
+  items: string[]
+) {
+  if (!workflow || !phase || !department || !admin) return
 
-  // Create admin user
-  const hashedPassword = await hash("1234", 12)
-  const admin = await prisma.user.create({
+  await prisma.formTemplate.create({
     data: {
-      name: "admin",
-      email: "admin@example.com",
-      role: Role.ADMIN,
-      hashedPassword: hashedPassword,
-    } as Prisma.UserUncheckedCreateInput,
-  })
-
-  // Create departments
-  const departments = await Promise.all(
-    departmentData.map(dept =>
-      prisma.department.create({
-        data: {
-          name: dept.name,
-          description: dept.description,
-          color: dept.color,
-        }
-      })
-    )
-  )
-
-  console.log(`Created ${departments.length} departments`)
-
-  // Create workflow
-  const workflow = await prisma.workflow.create({
-    data: {
-      name: workflowData.name,
-      description: workflowData.description,
-    },
-  })
-
-  // Create phases and their tasks
-  for (const phaseData of workflowData.phases) {
-    const phase = await prisma.phase.create({
-      data: {
-        name: phaseData.name,
-        description: phaseData.description,
-        order: phaseData.order,
-        workflowId: workflow.id,
+      name,
+      description: `Checklist for ${name.toLowerCase()}`,
+      workflowId: workflow.id,
+      phaseId: phase.id,
+      departmentId: department.id,
+      type: "CHECKLIST",
+      isActive: true,
+      order: 0,
+      schema: {
+        sections: [
+          {
+            id: crypto.randomUUID(),
+            title: name,
+            type: "CHECKLIST",
+            fields: items.map(item => ({
+              id: crypto.randomUUID(),
+              label: item,
+              type: "checkbox",
+              required: true,
+              options: []
+            }))
+          }
+        ]
       },
-    })
-
-    // Map department names to their IDs with type safety
-    const departmentMap: DepartmentMapping = {
-      'Marketing': departments.find(d => d.name === 'Marketing')?.id,
-      'Graphic Design': departments.find(d => d.name === 'Design')?.id,
-      'Production process': departments.find(d => d.name === 'Production')?.id,
-      'Installation prep': departments.find(d => d.name === 'Installation')?.id,
-      'Body work process': departments.find(d => d.name === 'All Departments')?.id,
-      'Paint process': departments.find(d => d.name === 'All Departments')?.id,
-      'Installation process': departments.find(d => d.name === 'Installation')?.id,
-    }
-
-    // Create tasks for the phase with type safety
-    await Promise.all(
-      phaseData.tasks.map(task => {
-        // Convert task priority to valid Priority enum value
-        let taskPriority: Priority
-        switch (task.priority) {
-          case "HIGH":
-          case "CRITICAL":
-            taskPriority = Priority.HIGH
-            break
-          case "LOW":
-            taskPriority = Priority.LOW
-            break
-          default:
-            taskPriority = Priority.MEDIUM
-        }
-
-        return prisma.workflowTask.create({
-          data: {
-            name: task.name,
-            description: task.description,
-            priority: taskPriority,
-            manHours: task.manHours,
-            order: task.order,
-            phaseId: phase.id,
-            departmentId: departmentMap[task.description] ?? departments.find(d => d.name === 'All Departments')?.id,
+      layout: {
+        sections: [
+          {
+            id: crypto.randomUUID(),
+            title: name,
+            type: "CHECKLIST",
+            fields: items.map(item => ({
+              id: crypto.randomUUID(),
+              label: item,
+              type: "checkbox"
+            }))
+          }
+        ]
+      },
+      style: {
+        theme: "default"
+      },
+      metadata: {
+        version: 1,
+        lastUpdated: new Date().toISOString()
+      },
+      currentVersion: 1,
+      versions: {
+        create: {
+          version: 1,
+          schema: {
+            sections: [
+              {
+                id: crypto.randomUUID(),
+                title: name,
+                type: "CHECKLIST",
+                fields: items.map(item => ({
+                  id: crypto.randomUUID(),
+                  label: item,
+                  type: "checkbox",
+                  required: true,
+                  options: []
+                }))
+              }
+            ]
           },
-        })
-      })
-    )
-  }
-
-  console.log("Created workflow with phases and tasks")
-
-  // Seed form status tracking data
-  await seedFormStatusTracking()
-
-  // Add checklist templates
-  await seedChecklistTemplates()
-
-  console.log("Seed data created successfully")
+          isActive: true,
+          createdById: admin.id,
+          changelog: "Initial version"
+        }
+      }
+    }
+  })
 }
 
 main()
