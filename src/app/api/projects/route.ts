@@ -1,66 +1,51 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
 import { z } from "zod"
 
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 
 const projectSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  workflowId: z.string(),
-  managerId: z.string(),
+  projectName: z.string().min(2),
+  date: z.string().datetime(),
+  vinNumber: z.string().length(17),
+  invoiceNumber: z.string().min(1),
+  projectTypes: z.array(z.string()),
 })
 
-export async function GET() {
+/**
+ * POST /api/projects
+ * Creates a new project with the provided details
+ */
+export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
+
+    if (!session) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const projects = await db.project.findMany({
-      include: {
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        phases: {
-          include: {
-            tasks: true,
-          },
-        },
+    const json = await req.json()
+    const body = projectSchema.parse(json)
+
+    const project = await prisma.project.create({
+      data: {
+        name: body.projectName,
+        startDate: new Date(body.date),
+        vinNumber: body.vinNumber,
+        invoiceNumber: body.invoiceNumber,
+        projectTypes: body.projectTypes,
+        status: "PENDING",
+        createdById: session.user.id,
+        updatedById: session.user.id,
       },
     })
 
-    return NextResponse.json(projects)
-  } catch (error) {
-    console.error("[PROJECTS_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    if (session.user.role !== "ADMIN" && session.user.role !== "MANAGER") {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const json = await request.json()
-    const body = projectSchema.parse(json)
-
-    // Check if workflow exists
-    const workflow = await db.workflow.findUnique({
-      where: { id: body.workflowId },
+    // Get the vehicle wrap workflow
+    const workflow = await prisma.workflow.findFirst({
+      where: {
+        name: "Vehicle Wrap Workflow",
+      },
       include: {
         phases: {
           include: {
@@ -74,59 +59,67 @@ export async function POST(request: Request) {
       return new NextResponse("Workflow not found", { status: 404 })
     }
 
-    // Create project with phases and tasks from workflow
-    const project = await db.project.create({
-      data: {
-        name: body.name,
-        description: body.description,
-        workflowId: body.workflowId,
-        managerId: body.managerId,
-        startDate: new Date(),
-        phases: {
-          create: workflow.phases.map((phase) => ({
-            name: phase.name,
-            description: phase.description,
-            order: phase.order,
-            phaseId: phase.id,
-            tasks: {
-              create: phase.tasks.map((task) => ({
-                name: task.name,
-                description: task.description,
-                priority: task.priority,
-                manHours: task.manHours,
-                order: task.order,
-                departmentId: task.departmentId,
-                workflowTaskId: task.id,
-              })),
-            },
-          })),
-        },
+    // Associate workflow with project
+    await prisma.project.update({
+      where: {
+        id: project.id,
       },
-      include: {
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        phases: {
-          include: {
-            tasks: true,
-          },
-        },
+      data: {
+        workflowId: workflow.id,
       },
     })
+
+    // Create project tasks from workflow tasks
+    for (const phase of workflow.phases) {
+      for (const task of phase.tasks) {
+        await prisma.projectTask.create({
+          data: {
+            name: task.name,
+            description: task.description,
+            status: "PENDING",
+            priority: task.priority,
+            order: task.order,
+            projectId: project.id,
+            phaseId: phase.id,
+            workflowTaskId: task.id,
+            createdById: session.user.id,
+            updatedById: session.user.id,
+          },
+        })
+      }
+    }
+
+    // Get form templates associated with the workflow
+    const formTemplates = await prisma.formTemplate.findMany({
+      where: {
+        workflowId: workflow.id,
+      },
+    })
+
+    // Create form instances for the project
+    for (const template of formTemplates) {
+      await prisma.formInstance.create({
+        data: {
+          name: template.name,
+          description: template.description,
+          status: "PENDING",
+          projectId: project.id,
+          formTemplateId: template.id,
+          phaseId: template.phaseId,
+          departmentId: template.departmentId,
+          schema: template.schema,
+          layout: template.layout,
+          style: template.style,
+          metadata: template.metadata,
+          createdById: session.user.id,
+          updatedById: session.user.id,
+        },
+      })
+    }
 
     return NextResponse.json(project)
   } catch (error) {
     console.error("[PROJECTS_POST]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    return new NextResponse("Internal Error", { status: 500 })
   }
 } 
