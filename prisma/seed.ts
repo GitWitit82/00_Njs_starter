@@ -9,7 +9,7 @@ interface WorkflowTask {
   name: string
   description: string
   order: number
-  priority: string
+  priority: Priority
   manHours: number
 }
 
@@ -85,12 +85,12 @@ const workflowData: WorkflowData = {
       description: "Initial marketing and concept phase",
       order: 1,
       tasks: [
-        { name: 'Creative Concept Meeting', description: 'Marketing', order: 1, priority: "MEDIUM", manHours: 2 },
-        { name: 'Follow up Email', description: 'Marketing', order: 2, priority: "MEDIUM", manHours: 1 },
-        { name: 'Rough Mock up', description: 'Marketing', order: 3, priority: "HIGH", manHours: 4 },
-        { name: 'Photos & Sizing', description: 'Marketing', order: 4, priority: "HIGH", manHours: 2 },
-        { name: 'Physical Inspection', description: 'Marketing', order: 5, priority: "HIGH", manHours: 2 },
-        { name: '$$$ Confirm and Update Invoice', description: 'Marketing', order: 6, priority: "HIGH", manHours: 1 }
+        { name: 'Creative Concept Meeting', description: 'Marketing', order: 1, priority: Priority.MEDIUM, manHours: 2 },
+        { name: 'Follow up Email', description: 'Marketing', order: 2, priority: Priority.MEDIUM, manHours: 1 },
+        { name: 'Rough Mock up', description: 'Marketing', order: 3, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Photos & Sizing', description: 'Marketing', order: 4, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Physical Inspection', description: 'Marketing', order: 5, priority: Priority.HIGH, manHours: 2 },
+        { name: '$$$ Confirm and Update Invoice', description: 'Marketing', order: 6, priority: Priority.HIGH, manHours: 1 }
       ]
     },
     {
@@ -98,17 +98,17 @@ const workflowData: WorkflowData = {
       description: "Design and approval phase",
       order: 2,
       tasks: [
-        { name: 'Pre-Design Layout Meeting', description: 'Graphic Design', order: 7, priority: "HIGH", manHours: 2 },
-        { name: 'Create and verify Template', description: 'Graphic Design', order: 8, priority: "HIGH", manHours: 4 },
-        { name: 'Start High Res Design', description: 'Graphic Design', order: 9, priority: "HIGH", manHours: 8 },
-        { name: 'Art Direction Sign Off', description: 'Graphic Design', order: 10, priority: "HIGH", manHours: 2 },
-        { name: 'Customer Sign Off', description: 'Graphic Design', order: 11, priority: "CRITICAL", manHours: 2 },
-        { name: 'Final Design', description: 'Graphic Design', order: 12, priority: "HIGH", manHours: 4 },
-        { name: 'Internal Proof', description: 'Graphic Design', order: 13, priority: "HIGH", manHours: 2 },
-        { name: 'Art Direction Sign Off', description: 'Graphic Design', order: 14, priority: "HIGH", manHours: 2 },
-        { name: 'Customer Sign Off', description: 'Graphic Design', order: 15, priority: "CRITICAL", manHours: 2 },
-        { name: '$$$ Confirm Customer Deposit', description: 'Graphic Design', order: 16, priority: "CRITICAL", manHours: 1 },
-        { name: 'Firm Hold Schedule Installation Drop Off', description: 'Graphic Design', order: 17, priority: "HIGH", manHours: 1 }
+        { name: 'Pre-Design Layout Meeting', description: 'Graphic Design', order: 7, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Create and verify Template', description: 'Graphic Design', order: 8, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Start High Res Design', description: 'Graphic Design', order: 9, priority: Priority.HIGH, manHours: 8 },
+        { name: 'Art Direction Sign Off', description: 'Graphic Design', order: 10, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Customer Sign Off', description: 'Graphic Design', order: 11, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Final Design', description: 'Graphic Design', order: 12, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Internal Proof', description: 'Graphic Design', order: 13, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Art Direction Sign Off', description: 'Graphic Design', order: 14, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Customer Sign Off', description: 'Graphic Design', order: 15, priority: Priority.HIGH, manHours: 2 },
+        { name: '$$$ Confirm Customer Deposit', description: 'Graphic Design', order: 16, priority: Priority.HIGH, manHours: 1 },
+        { name: 'Firm Hold Schedule Installation Drop Off', description: 'Graphic Design', order: 17, priority: Priority.HIGH, manHours: 1 }
       ]
     },
     {
@@ -116,17 +116,17 @@ const workflowData: WorkflowData = {
       description: "Production and materials phase",
       order: 3,
       tasks: [
-        { name: 'Order Raw Materials', description: 'Production process', order: 18, priority: "HIGH", manHours: 2 },
-        { name: 'Make Installer Sheet', description: 'Production process', order: 19, priority: "MEDIUM", manHours: 2 },
-        { name: 'Print Ready Files Blue Prints and Review', description: 'Production process', order: 20, priority: "HIGH", manHours: 4 },
-        { name: 'Create Test Print', description: 'Production process', order: 21, priority: "HIGH", manHours: 2 },
-        { name: 'Pre Install Meeting', description: 'Production process', order: 22, priority: "HIGH", manHours: 2 },
-        { name: 'Paneling', description: 'Production process', order: 23, priority: "MEDIUM", manHours: 4 },
-        { name: 'Printing', description: 'Production process', order: 24, priority: "HIGH", manHours: 6 },
-        { name: 'Lamination & Rough QC', description: 'Production process', order: 25, priority: "HIGH", manHours: 4 },
-        { name: 'Trim & Sew', description: 'Production process', order: 26, priority: "MEDIUM", manHours: 4 },
-        { name: 'Plot', description: 'Production process', order: 27, priority: "MEDIUM", manHours: 2 },
-        { name: 'Project Inventory Control / QC', description: 'Production process', order: 28, priority: "HIGH", manHours: 2 }
+        { name: 'Order Raw Materials', description: 'Production process', order: 18, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Make Installer Sheet', description: 'Production process', order: 19, priority: Priority.MEDIUM, manHours: 2 },
+        { name: 'Print Ready Files Blue Prints and Review', description: 'Production process', order: 20, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Create Test Print', description: 'Production process', order: 21, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Pre Install Meeting', description: 'Production process', order: 22, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Paneling', description: 'Production process', order: 23, priority: Priority.MEDIUM, manHours: 4 },
+        { name: 'Printing', description: 'Production process', order: 24, priority: Priority.HIGH, manHours: 6 },
+        { name: 'Lamination & Rough QC', description: 'Production process', order: 25, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Trim & Sew', description: 'Production process', order: 26, priority: Priority.MEDIUM, manHours: 4 },
+        { name: 'Plot', description: 'Production process', order: 27, priority: Priority.MEDIUM, manHours: 2 },
+        { name: 'Project Inventory Control / QC', description: 'Production process', order: 28, priority: Priority.HIGH, manHours: 2 }
       ]
     },
     {
@@ -134,10 +134,10 @@ const workflowData: WorkflowData = {
       description: "Vehicle preparation phase",
       order: 4,
       tasks: [
-        { name: 'Intake of Item', description: 'Installation prep', order: 29, priority: "HIGH", manHours: 1 },
-        { name: 'Wrap Plan Set Up', description: 'Installation prep', order: 30, priority: "HIGH", manHours: 2 },
-        { name: 'Repairs & Vinyl Adhesive Removal', description: 'Installation prep', order: 31, priority: "HIGH", manHours: 4 },
-        { name: 'Prep Clean', description: 'Installation prep', order: 32, priority: "HIGH", manHours: 2 }
+        { name: 'Intake of Item', description: 'Installation prep', order: 29, priority: Priority.HIGH, manHours: 1 },
+        { name: 'Wrap Plan Set Up', description: 'Installation prep', order: 30, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Repairs & Vinyl Adhesive Removal', description: 'Installation prep', order: 31, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Prep Clean', description: 'Installation prep', order: 32, priority: Priority.HIGH, manHours: 2 }
       ]
     },
     {
@@ -145,10 +145,10 @@ const workflowData: WorkflowData = {
       description: "Vehicle body work phase",
       order: 5,
       tasks: [
-        { name: 'Putty', description: 'Body work process', order: 33, priority: "MEDIUM", manHours: 2 },
-        { name: 'Bondo', description: 'Body work process', order: 34, priority: "MEDIUM", manHours: 3 },
-        { name: 'Dent Removal', description: 'Body work process', order: 35, priority: "HIGH", manHours: 4 },
-        { name: 'Fabrication', description: 'Body work process', order: 36, priority: "HIGH", manHours: 6 }
+        { name: 'Putty', description: 'Body work process', order: 33, priority: Priority.MEDIUM, manHours: 2 },
+        { name: 'Bondo', description: 'Body work process', order: 34, priority: Priority.MEDIUM, manHours: 3 },
+        { name: 'Dent Removal', description: 'Body work process', order: 35, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Fabrication', description: 'Body work process', order: 36, priority: Priority.HIGH, manHours: 6 }
       ]
     },
     {
@@ -156,73 +156,102 @@ const workflowData: WorkflowData = {
       description: "Vehicle painting phase",
       order: 6,
       tasks: [
-        { name: 'Surface Prep / Degrease', description: 'Paint process', order: 37, priority: "HIGH", manHours: 2 },
-        { name: 'Masking', description: 'Paint process', order: 38, priority: "MEDIUM", manHours: 2 },
-        { name: 'Primer', description: 'Paint process', order: 39, priority: "HIGH", manHours: 2 },
-        { name: 'Paint', description: 'Paint process', order: 40, priority: "HIGH", manHours: 4 },
-        { name: 'Specialty Paint/ Texture/ Bedliner', description: 'Paint process', order: 41, priority: "HIGH", manHours: 4 },
-        { name: 'Removal of Masking', description: 'Paint process', order: 42, priority: "MEDIUM", manHours: 1 }
+        { name: 'Surface Prep / Degrease', description: 'Paint process', order: 37, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Masking', description: 'Paint process', order: 38, priority: Priority.MEDIUM, manHours: 2 },
+        { name: 'Primer', description: 'Paint process', order: 39, priority: Priority.HIGH, manHours: 2 },
+        { name: 'Paint', description: 'Paint process', order: 40, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Specialty Paint/ Texture/ Bedliner', description: 'Paint process', order: 41, priority: Priority.HIGH, manHours: 4 },
+        { name: 'Removal of Masking', description: 'Paint process', order: 42, priority: Priority.MEDIUM, manHours: 1 }
       ]
     }
   ]
 }
 
 async function main() {
-  // Create admin user
-  const hashedPassword = await hash("password123", 12)
-  const adminUser = await prisma.user.create({
-    data: {
-      name: "Admin User",
-      email: "admin@example.com",
-      hashedPassword,
-      role: "ADMIN",
-    },
-  })
+  // Clean up existing data in the correct order
+  try {
+    // Delete all data in reverse order of dependencies
+    await prisma.formStatusHistory.deleteMany()
+    await prisma.formResponse.deleteMany()
+    await prisma.formInstance.deleteMany()
+    await prisma.formVersion.deleteMany()
+    await prisma.formCompletionRequirement.deleteMany()
+    await prisma.formTemplate.deleteMany()
+  await prisma.userPreference.deleteMany()
+  await prisma.projectTask.deleteMany()
+  await prisma.projectPhase.deleteMany()
+  await prisma.project.deleteMany()
+  await prisma.workflowTask.deleteMany()
+  await prisma.phase.deleteMany()
+  await prisma.workflow.deleteMany()
+  await prisma.department.deleteMany()
+    await prisma.session.deleteMany()
+    await prisma.account.deleteMany()
+  await prisma.user.deleteMany()
+
+    // Create admin user with upsert to handle potential duplicates
+    const hashedPassword = await hash("1234", 12)
+    const adminUser = await prisma.user.upsert({
+      where: {
+        email: "admin@example.com"
+      },
+      update: {
+        name: "admin",
+        hashedPassword,
+        role: "ADMIN"
+      },
+      create: {
+        name: "admin",
+        email: "admin@example.com",
+        hashedPassword,
+        role: "ADMIN"
+      }
+    })
 
   // Create departments
-  const departments = await Promise.all(
-    departmentData.map(dept =>
-      prisma.department.create({
-        data: dept
-      })
+    const departments = await Promise.all(
+      departmentData.map(dept =>
+        prisma.department.create({
+          data: dept
+        })
+      )
     )
-  )
 
-  // Create department mapping for easy lookup
-  const departmentMapping: DepartmentMapping = departments.reduce((acc, dept) => ({
-    ...acc,
-    [dept.name]: dept.id
-  }), {})
+    // Create department mapping for easy lookup
+    const departmentMapping: DepartmentMapping = departments.reduce((acc, dept) => ({
+      ...acc,
+      [dept.name]: dept.id
+    }), {})
 
   // Create workflow
   const workflow = await prisma.workflow.create({
     data: {
-      name: workflowData.name,
-      description: workflowData.description,
-    },
-  })
-
-  // Create phases and tasks
-  for (const phaseData of workflowData.phases) {
-    const phase = await prisma.phase.create({
-      data: {
-        name: phaseData.name,
-        description: phaseData.description,
-        order: phaseData.order,
-        workflowId: workflow.id,
+        name: workflowData.name,
+        description: workflowData.description,
       },
     })
 
-    // Create tasks for the phase
+    // Create phases and tasks
+    for (const phaseData of workflowData.phases) {
+      const phase = await prisma.phase.create({
+      data: {
+          name: phaseData.name,
+          description: phaseData.description,
+          order: phaseData.order,
+        workflowId: workflow.id,
+      },
+      })
+
+      // Create tasks for the phase
     await Promise.all(
-      phaseData.tasks.map(taskData =>
+        phaseData.tasks.map(taskData =>
         prisma.workflowTask.create({
           data: {
-            name: taskData.name,
-            description: taskData.description,
-            order: taskData.order,
-            priority: taskData.priority as Priority,
-            manHours: taskData.manHours,
+              name: taskData.name,
+              description: taskData.description,
+              order: taskData.order,
+              priority: taskData.priority,
+              manHours: taskData.manHours,
             phaseId: phase.id,
           },
         })
@@ -230,8 +259,12 @@ async function main() {
     )
   }
 
-  // Create checklist templates
-  await seedChecklistTemplates()
+    // Create checklist templates
+    await seedChecklistTemplates()
+  } catch (error) {
+    console.error('Error in seed:', error)
+    throw error
+  }
 }
 
 async function seedChecklistTemplates() {
@@ -438,7 +471,6 @@ async function createChecklistTemplate(
       workflowId: workflow.id,
       phaseId: phase.id,
       departmentId: department.id,
-      type: "CHECKLIST",
       isActive: true,
       order: 0,
       schema: {
