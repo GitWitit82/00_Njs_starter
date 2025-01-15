@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Task assignment functionality with user picker
+- Task status updates with optimistic UI
+- Task comments and activity tracking system
+- Activity feed with real-time updates
+- Task details view with tabbed interface
+- User avatars in activity feed
+- Timestamp tracking for all activities
+- Status change tracking with history
+- Assignment change tracking with history
+- Comment system with instant updates
 - Project type-specific fields (e.g., VIN number for vehicle wraps)
 - Enhanced project details view with progress tracking
 - Real-time project progress calculation
@@ -23,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive form dependency graph with zoom controls
 
 ### Changed
+- Updated task management interface with modern UI
+- Enhanced activity tracking with detailed history
+- Improved task status visualization
 - Updated project creation workflow with type-specific validation
 - Enhanced project details page with comprehensive progress tracking
 - Improved project phase visualization
