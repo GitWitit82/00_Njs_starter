@@ -2,124 +2,105 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { z } from "zod"
 
-import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { createProjectFromWorkflow } from "@/lib/services/project.service"
 
-const projectSchema = z.object({
-  projectName: z.string().min(2),
-  date: z.string().datetime(),
-  vinNumber: z.string().length(17),
-  invoiceNumber: z.string().min(1),
-  projectTypes: z.array(z.string()),
+/**
+ * Schema for validating project creation request
+ */
+const createProjectSchema = z.object({
+  name: z.string().min(1, "Project name is required"),
+  description: z.string().optional(),
+  projectType: z.enum(["VEHICLE_WRAP", "SIGN", "MURAL"]),
+  customerName: z.string().min(1, "Customer name is required"),
+  vinNumber: z.string().optional(),
+  workflowId: z.string().min(1, "Workflow ID is required"),
+  startDate: z.string().transform(str => new Date(str)),
+  endDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
 })
 
 /**
  * POST /api/projects
- * Creates a new project with the provided details
+ * Creates a new project from a workflow template
  */
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-
-    if (!session) {
+    
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
     const json = await req.json()
-    const body = projectSchema.parse(json)
+    const body = createProjectSchema.parse(json)
 
-    const project = await prisma.project.create({
-      data: {
-        name: body.projectName,
-        startDate: new Date(body.date),
-        vinNumber: body.vinNumber,
-        invoiceNumber: body.invoiceNumber,
-        projectTypes: body.projectTypes,
-        status: "PENDING",
-        createdById: session.user.id,
-        updatedById: session.user.id,
-      },
-    })
-
-    // Get the vehicle wrap workflow
-    const workflow = await prisma.workflow.findFirst({
-      where: {
-        name: "Vehicle Wrap Workflow",
-      },
-      include: {
-        phases: {
-          include: {
-            tasks: true,
-          },
-        },
-      },
-    })
-
-    if (!workflow) {
-      return new NextResponse("Workflow not found", { status: 404 })
+    // Additional validation for vehicle wrap projects
+    if (body.projectType === "VEHICLE_WRAP" && !body.vinNumber) {
+      return new NextResponse(
+        "VIN number is required for vehicle wrap projects",
+        { status: 400 }
+      )
     }
 
-    // Associate workflow with project
-    await prisma.project.update({
-      where: {
-        id: project.id,
-      },
-      data: {
-        workflowId: workflow.id,
-      },
+    const project = await createProjectFromWorkflow({
+      ...body,
+      managerId: session.user.id,
     })
-
-    // Create project tasks from workflow tasks
-    for (const phase of workflow.phases) {
-      for (const task of phase.tasks) {
-        await prisma.projectTask.create({
-          data: {
-            name: task.name,
-            description: task.description,
-            status: "PENDING",
-            priority: task.priority,
-            order: task.order,
-            projectId: project.id,
-            phaseId: phase.id,
-            workflowTaskId: task.id,
-            createdById: session.user.id,
-            updatedById: session.user.id,
-          },
-        })
-      }
-    }
-
-    // Get form templates associated with the workflow
-    const formTemplates = await prisma.formTemplate.findMany({
-      where: {
-        workflowId: workflow.id,
-      },
-    })
-
-    // Create form instances for the project
-    for (const template of formTemplates) {
-      await prisma.formInstance.create({
-        data: {
-          name: template.name,
-          description: template.description,
-          status: "PENDING",
-          projectId: project.id,
-          formTemplateId: template.id,
-          phaseId: template.phaseId,
-          departmentId: template.departmentId,
-          schema: template.schema,
-          layout: template.layout,
-          style: template.style,
-          metadata: template.metadata,
-          createdById: session.user.id,
-          updatedById: session.user.id,
-        },
-      })
-    }
 
     return NextResponse.json(project)
   } catch (error) {
-    console.error("[PROJECTS_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    if (error instanceof z.ZodError) {
+      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+    }
+
+    console.error("[PROJECTS]", error)
+    return new NextResponse("Internal Server Error", { status: 500 })
+  }
+}
+
+/**
+ * GET /api/projects
+ * Gets all projects or filters by type
+ */
+export async function GET(req: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const projectType = searchParams.get("type")
+
+    const where = projectType ? {
+      projectType: projectType as "VEHICLE_WRAP" | "SIGN" | "MURAL"
+    } : {}
+
+    const projects = await prisma.project.findMany({
+      where,
+      include: {
+        phases: {
+          include: {
+            tasks: true
+          }
+        },
+        manager: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    })
+
+    return NextResponse.json(projects)
+  } catch (error) {
+    console.error("[PROJECTS]", error)
+    return new NextResponse("Internal Server Error", { status: 500 })
   }
 } 

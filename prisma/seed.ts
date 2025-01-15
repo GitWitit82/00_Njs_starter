@@ -1,8 +1,16 @@
-import { PrismaClient, Role, Priority, ProjectStatus, Prisma, FormPriority } from "@prisma/client"
+import { PrismaClient, Role, Priority, ProjectStatus, Prisma } from "@prisma/client"
 import { hash } from "bcryptjs"
 import crypto from "crypto"
 
 const prisma = new PrismaClient()
+
+const PROJECT_TYPES = {
+  VEHICLE_WRAP: "VEHICLE_WRAP",
+  SIGN: "SIGN",
+  MURAL: "MURAL",
+} as const;
+
+type ProjectType = typeof PROJECT_TYPES[keyof typeof PROJECT_TYPES];
 
 // TypeScript interfaces for workflow data structure
 interface WorkflowTask {
@@ -29,6 +37,20 @@ interface WorkflowData {
 // Type for department mapping
 type DepartmentMapping = {
   [key: string]: string | undefined
+}
+
+// Project seed data type
+interface ProjectSeedData {
+  name: string
+  description: string
+  projectType: ProjectType
+  customerName: string
+  vinNumber?: string
+  workflowId: string
+  managerId: string
+  startDate: Date
+  endDate: Date
+  status: ProjectStatus
 }
 
 // Department seed data
@@ -167,6 +189,44 @@ const workflowData: WorkflowData = {
   ]
 }
 
+// Sample projects data
+const projectsData: ProjectSeedData[] = [
+  {
+    name: "Ford F150 Full Wrap",
+    description: "Full vehicle wrap for Ford F150",
+    projectType: PROJECT_TYPES.VEHICLE_WRAP,
+    customerName: "John Smith",
+    vinNumber: "1FTEW1EG5JFB53281",
+    workflowId: "vehicle-wrap-workflow", // This will be replaced with actual ID
+    managerId: "admin-user", // This will be replaced with actual ID
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    status: ProjectStatus.PLANNING
+  },
+  {
+    name: "Store Front Sign",
+    description: "LED-lit storefront sign for ABC Company",
+    projectType: PROJECT_TYPES.SIGN,
+    customerName: "ABC Company",
+    workflowId: "sign-workflow", // This will be replaced with actual ID
+    managerId: "admin-user", // This will be replaced with actual ID
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+    status: ProjectStatus.PLANNING
+  },
+  {
+    name: "City Park Mural",
+    description: "Large-scale mural for city park",
+    projectType: PROJECT_TYPES.MURAL,
+    customerName: "City Parks Department",
+    workflowId: "mural-workflow", // This will be replaced with actual ID
+    managerId: "admin-user", // This will be replaced with actual ID
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    status: ProjectStatus.PLANNING
+  }
+];
+
 async function main() {
   // Clean up existing data in the correct order
   try {
@@ -261,6 +321,63 @@ async function main() {
 
     // Create checklist templates
     await seedChecklistTemplates()
+
+    // Create sample projects
+    for (const projectData of projectsData) {
+      const workflow = await prisma.workflow.findFirst({
+        where: { name: { contains: projectData.projectType.toLowerCase() } }
+      });
+      
+      if (!workflow) continue;
+
+      const admin = await prisma.user.findFirst({
+        where: { role: "ADMIN" }
+      });
+
+      if (!admin) continue;
+
+      const project = await prisma.project.create({
+        data: {
+          ...projectData,
+          workflowId: workflow.id,
+          managerId: admin.id
+        }
+      });
+
+      // Get workflow phases and create project phases
+      const phases = await prisma.phase.findMany({
+        where: { workflowId: workflow.id },
+        include: { tasks: true }
+      });
+
+      for (const phase of phases) {
+        const projectPhase = await prisma.projectPhase.create({
+          data: {
+            name: phase.name,
+            description: phase.description,
+            order: phase.order,
+            projectId: project.id,
+            phaseId: phase.id
+          }
+        });
+
+        // Create project tasks
+        for (const task of phase.tasks) {
+          await prisma.projectTask.create({
+            data: {
+              name: task.name,
+              description: task.description,
+              priority: task.priority,
+              manHours: task.manHours,
+              order: task.order,
+              projectPhaseId: projectPhase.id,
+              workflowTaskId: task.id,
+              departmentId: task.departmentId
+            }
+          });
+        }
+      }
+    }
   } catch (error) {
     console.error('Error in seed:', error)
     throw error

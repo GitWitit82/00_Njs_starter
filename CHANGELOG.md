@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Project type-specific fields (e.g., VIN number for vehicle wraps)
+- Enhanced project details view with progress tracking
+- Real-time project progress calculation
+- Phase-based task organization
+- Project status badges with visual indicators
 - Form status tracking system with history
 - Batch operations for form instances
 - Form dependency visualization with force-directed graph
@@ -18,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive form dependency graph with zoom controls
 
 ### Changed
+- Updated project creation workflow with type-specific validation
+- Enhanced project details page with comprehensive progress tracking
+- Improved project phase visualization
 - Updated sidebar navigation to include Forms section with sub-items
 - Enhanced form instance page with status management
 - Improved form template creation workflow
@@ -28,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Form instance creation during project initialization
 - Status transition validation
 - Navigation issues in sidebar
+- Project details page synchronous data fetching
+- Project type validation in creation form
 
 ## [1.0.0] - 2024-01-08
 

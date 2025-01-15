@@ -56,6 +56,9 @@ model User {
   createdVersions FormVersion[] // Add relation for form versions
   responseHistory FormResponseHistory[] // Add relation for response history
   statusChanges   FormStatusHistory[]
+  taskActivity  TaskActivity[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model VerificationToken {
@@ -114,6 +117,9 @@ model Project {
   id            String         @id @default(cuid())
   name          String
   description   String?
+  projectType   ProjectType
+  customerName  String
+  vinNumber     String?       // Only for vehicle wraps
   status        ProjectStatus  @default(PLANNING)
   startDate     DateTime
   endDate       DateTime?
@@ -170,6 +176,25 @@ model ProjectTask {
   dependentOn    ProjectTask[]  @relation("TaskDependencies")
   formResponses  FormResponse[] @relation("TaskResponses")
   formInstances  FormInstance[] // Add relation for form instances
+  activity     TaskActivity[]
+
+  @@index([projectPhaseId])
+  @@index([departmentId])
+  @@index([assignedToId])
+}
+
+model TaskActivity {
+  id        String      @id @default(cuid())
+  taskId    String
+  userId    String
+  type      String      // COMMENT, STATUS_CHANGE, ASSIGNMENT
+  content   String
+  task      ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 // Form Management Models
@@ -416,4 +441,10 @@ model FormCompletionRequirement {
   updatedAt         DateTime      @updatedAt
 
   @@unique([templateId, phaseId])
+}
+
+enum ProjectType {
+  VEHICLE_WRAP
+  SIGN
+  MURAL
 }
