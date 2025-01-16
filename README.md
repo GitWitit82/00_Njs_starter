@@ -164,10 +164,26 @@ This will create:
   - Sign projects
   - Mural projects
 
-7. Start the development server:
+7. Development server:
 ```bash
 npm run dev
 ```
+
+8. Production build:
+For an optimized production build with comprehensive checks and validations:
+```bash
+npm run build:optimize
+```
+
+This will:
+- Clean up previous build artifacts
+- Run type checking and linting
+- Perform bundle analysis
+- Execute tests
+- Create an optimized production build
+- Validate the build output
+
+For more details on the build process, see [Build Optimization Guide](docs/build-optimization.md).
 
 ## Development Guidelines
 

@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "analyze": "ANALYZE=true next build",
+    "build:optimize": "bash build.sh",
     "db:seed": "prisma db seed",
     "create-admin": "ts-node scripts/create-admin.ts"
   },
