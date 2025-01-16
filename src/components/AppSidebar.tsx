@@ -177,8 +177,9 @@ export function AppSidebar() {
                 href={hasSubroutes ? "#" : route.href}
                 onClick={hasSubroutes ? (e) => {
                   e.preventDefault()
-                  if (!isCollapsed) {
-                    toggleExpand(route.href)
+                  toggleExpand(route.href)
+                  if (isCollapsed) {
+                    setIsCollapsed(false)
                   }
                 } : undefined}
                 className={cn(
@@ -199,8 +200,23 @@ export function AppSidebar() {
               </Link>
             </TooltipTrigger>
             {isCollapsed && (
-              <TooltipContent side="right">
-                {route.label}
+              <TooltipContent side="right" className="min-w-[180px]">
+                <div>
+                  <div className="font-medium">{route.label}</div>
+                  {hasSubroutes && (
+                    <div className="mt-1 ml-4 space-y-1">
+                      {route.subroutes?.map((subroute) => (
+                        <Link
+                          key={subroute.href}
+                          href={subroute.href}
+                          className="block text-sm text-muted-foreground hover:text-accent-foreground"
+                        >
+                          {subroute.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </TooltipContent>
             )}
           </Tooltip>
