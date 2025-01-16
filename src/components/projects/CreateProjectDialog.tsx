@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,25 +36,44 @@ interface CreateProjectDialogProps {
  */
 export function CreateProjectDialog({ workflows }: CreateProjectDialogProps) {
   const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { data: session, status } = useSession();
 
   const handleSubmit = async (data: any) => {
+    if (status === "loading") {
+      return;
+    }
+
+    if (status === "unauthenticated" || !session?.user?.id) {
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to create a project",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      setIsLoading(true);
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        credentials: "include",
+        body: JSON.stringify({
+          ...data,
+          managerId: session.user.id,
+        }),
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
+      const responseData = await response.json();
 
-      const project = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to create project");
+      }
 
       toast({
         title: "Success",
@@ -62,14 +82,18 @@ export function CreateProjectDialog({ workflows }: CreateProjectDialogProps) {
 
       setOpen(false);
       router.refresh();
-      router.push(`/projects/${project.id}`);
+      router.push(`/projects/${responseData.id}`);
     } catch (error) {
       console.error("Error creating project:", error);
       toast({
         title: "Error",
-        description: "Failed to create project. Please try again.",
+        description: error instanceof Error 
+          ? `Failed to create project: ${error.message}` 
+          : "Failed to create project. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,7 +112,11 @@ export function CreateProjectDialog({ workflows }: CreateProjectDialogProps) {
             Create a new project by selecting a project type and workflow template.
           </DialogDescription>
         </DialogHeader>
-        <CreateProjectForm workflows={workflows} onSubmit={handleSubmit} />
+        <CreateProjectForm 
+          workflows={workflows} 
+          onSubmit={handleSubmit} 
+          isLoading={isLoading}
+        />
       </DialogContent>
     </Dialog>
   );

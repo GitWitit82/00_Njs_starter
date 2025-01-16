@@ -109,7 +109,7 @@ model WorkflowTask {
   phase        Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   departmentId String?
   department   Department?   @relation(fields: [departmentId], references: [id])
-  projectTasks ProjectTask[] // Instances of this task in projects
+  projectTasks ProjectTask[] @relation("WorkflowTaskToProjectTask")
 }
 
 // Project Implementation Models
@@ -131,6 +131,7 @@ model Project {
   manager       User           @relation("ProjectManagers", fields: [managerId], references: [id])
   phases        ProjectPhase[]
   formInstances FormInstance[] // Add relation for form instances
+  tasks       ProjectTask[]
 }
 
 model ProjectPhase {
@@ -151,47 +152,53 @@ model ProjectPhase {
 }
 
 model ProjectTask {
-  id             String         @id @default(cuid())
-  name           String
-  description    String?
-  priority       Priority       @default(MEDIUM)
-  status         TaskStatus     @default(NOT_STARTED)
-  manHours       Float
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  status      String      @default("NOT_STARTED")
+  priority    String      @default("MEDIUM")
+  manHours    Float       @default(1)
   scheduledStart DateTime?
   scheduledEnd   DateTime?
   actualStart    DateTime?
   actualEnd      DateTime?
-  order          Int            @default(0)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  projectPhaseId String
-  projectPhase   ProjectPhase   @relation(fields: [projectPhaseId], references: [id], onDelete: Cascade)
-  departmentId   String?
-  department     Department?    @relation(fields: [departmentId], references: [id])
-  assignedToId   String?
-  assignedTo     User?          @relation(fields: [assignedToId], references: [id])
-  workflowTaskId String?
-  workflowTask   WorkflowTask?  @relation(fields: [workflowTaskId], references: [id])
-  dependencies   ProjectTask[]  @relation("TaskDependencies")
-  dependentOn    ProjectTask[]  @relation("TaskDependencies")
-  formResponses  FormResponse[] @relation("TaskResponses")
-  formInstances  FormInstance[] // Add relation for form instances
-  activity     TaskActivity[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  order       Int         @default(0)
 
-  @@index([projectPhaseId])
-  @@index([departmentId])
+  // Relations
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  phase       ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  phaseId     String
+  assignedTo  User?       @relation(fields: [assignedToId], references: [id])
+  assignedToId String?
+  department  Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  taskActivities TaskActivity[]
+  workflowTask WorkflowTask? @relation("WorkflowTaskToProjectTask", fields: [workflowTaskId], references: [id])
+  workflowTaskId String?
+  formInstances FormInstance[]
+  responses    FormResponse[] @relation("TaskResponses")
+
+  @@index([projectId])
+  @@index([phaseId])
   @@index([assignedToId])
+  @@index([departmentId])
+  @@index([workflowTaskId])
 }
 
 model TaskActivity {
   id        String      @id @default(cuid())
-  taskId    String
-  userId    String
-  type      String      // COMMENT, STATUS_CHANGE, ASSIGNMENT
-  content   String
+  type      String      // STATUS_CHANGE, PRIORITY_CHANGE, COMMENT, etc.
+  details   String
+  createdAt DateTime    @default(now())
+
+  // Relations
   task      ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
   user      User       @relation(fields: [userId], references: [id])
-  createdAt DateTime   @default(now())
+  userId    String
 
   @@index([taskId])
   @@index([userId])

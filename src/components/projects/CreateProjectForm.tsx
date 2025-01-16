@@ -5,11 +5,11 @@
  * @description Form component for creating new projects with project type selection
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 import { cn } from "@/lib/utils";
@@ -73,39 +73,73 @@ interface Workflow {
 interface CreateProjectFormProps {
   workflows: Workflow[];
   onSubmit: (data: FormData) => Promise<void>;
+  isLoading: boolean;
 }
 
 /**
  * Form component for creating new projects
  */
-export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-
+export function CreateProjectForm({ workflows, onSubmit, isLoading }: CreateProjectFormProps) {
   const form = useForm<FormData>({
     resolver: zodResolver(createProjectSchema),
     defaultValues: {
       name: "",
       description: "",
-      projectType: "VEHICLE_WRAP",
+      projectType: PROJECT_TYPES.VEHICLE_WRAP,
       customerName: "",
       vinNumber: "",
       startDate: new Date(),
+      workflowId: workflows.find(w => w.name.toLowerCase().includes("vehicle"))?.id || "",
     },
   });
 
   const projectType = form.watch("projectType");
 
+  // Update workflow when project type changes
+  useEffect(() => {
+    const defaultWorkflow = workflows.find(w => {
+      if (projectType === PROJECT_TYPES.VEHICLE_WRAP) return w.name.toLowerCase().includes("vehicle");
+      if (projectType === PROJECT_TYPES.SIGN) return w.name.toLowerCase().includes("sign");
+      if (projectType === PROJECT_TYPES.MURAL) return w.name.toLowerCase().includes("mural");
+      return false;
+    });
+
+    if (defaultWorkflow) {
+      form.setValue("workflowId", defaultWorkflow.id);
+    }
+  }, [projectType, workflows, form]);
+
   const handleSubmit = async (data: FormData) => {
     try {
-      setIsLoading(true);
       await onSubmit(data);
-      form.reset();
+      form.reset({
+        ...form.getValues(),
+        name: "",
+        description: "",
+        customerName: "",
+        vinNumber: "",
+        startDate: new Date(),
+        endDate: undefined,
+      });
     } catch (error) {
       console.error("Error creating project:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  const filteredWorkflows = workflows.filter(w => {
+    if (projectType === PROJECT_TYPES.VEHICLE_WRAP) return w.name.toLowerCase().includes("vehicle");
+    if (projectType === PROJECT_TYPES.SIGN) return w.name.toLowerCase().includes("sign");
+    if (projectType === PROJECT_TYPES.MURAL) return w.name.toLowerCase().includes("mural");
+    return false;
+  });
+
+  // Ensure there's always a selected workflow
+  useEffect(() => {
+    const currentWorkflowId = form.getValues("workflowId");
+    if (!currentWorkflowId && filteredWorkflows.length > 0) {
+      form.setValue("workflowId", filteredWorkflows[0].id);
+    }
+  }, [filteredWorkflows, form]);
 
   return (
     <Form {...form}>
@@ -117,8 +151,20 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
             <FormItem>
               <FormLabel>Project Type</FormLabel>
               <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  // Reset workflow when project type changes
+                  const matchingWorkflow = workflows.find(w => {
+                    if (value === PROJECT_TYPES.VEHICLE_WRAP) return w.name.toLowerCase().includes("vehicle");
+                    if (value === PROJECT_TYPES.SIGN) return w.name.toLowerCase().includes("sign");
+                    if (value === PROJECT_TYPES.MURAL) return w.name.toLowerCase().includes("mural");
+                    return false;
+                  });
+                  if (matchingWorkflow) {
+                    form.setValue("workflowId", matchingWorkflow.id);
+                  }
+                }}
+                value={field.value}
                 disabled={isLoading}
               >
                 <FormControl>
@@ -127,9 +173,9 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="VEHICLE_WRAP">Vehicle Wrap</SelectItem>
-                  <SelectItem value="SIGN">Sign</SelectItem>
-                  <SelectItem value="MURAL">Mural</SelectItem>
+                  <SelectItem value={PROJECT_TYPES.VEHICLE_WRAP}>Vehicle Wrap</SelectItem>
+                  <SelectItem value={PROJECT_TYPES.SIGN}>Sign</SelectItem>
+                  <SelectItem value={PROJECT_TYPES.MURAL}>Mural</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -169,7 +215,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
           )}
         />
 
-        {projectType === "VEHICLE_WRAP" && (
+        {projectType === PROJECT_TYPES.VEHICLE_WRAP && (
           <FormField
             control={form.control}
             name="vinNumber"
@@ -218,7 +264,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
               <FormLabel>Workflow</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value || filteredWorkflows[0]?.id || ""}
                 disabled={isLoading}
               >
                 <FormControl>
@@ -227,7 +273,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {workflows.map((workflow) => (
+                  {filteredWorkflows.map((workflow) => (
                     <SelectItem key={workflow.id} value={workflow.id}>
                       {workflow.name}
                     </SelectItem>
@@ -272,7 +318,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date < new Date() || date < new Date("1900-01-01")
+                        date < new Date(new Date().setHours(0, 0, 0, 0))
                       }
                       initialFocus
                     />
@@ -288,7 +334,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
             name="endDate"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel>End Date</FormLabel>
+                <FormLabel>End Date (Optional)</FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -315,8 +361,7 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
                       selected={field.value}
                       onSelect={field.onChange}
                       disabled={(date) =>
-                        date < form.getValues("startDate") ||
-                        date < new Date("1900-01-01")
+                        date < (form.getValues("startDate") || new Date())
                       }
                       initialFocus
                     />
@@ -328,11 +373,10 @@ export function CreateProjectForm({ workflows, onSubmit }: CreateProjectFormProp
           />
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isLoading}>
-            Create Project
-          </Button>
-        </div>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create Project
+        </Button>
       </form>
     </Form>
   );

@@ -2,11 +2,13 @@
 
 /**
  * @file TasksTable.tsx
- * @description Table component for displaying project tasks with links to task details
+ * @description Table component for displaying project tasks with status and actions
  */
 
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { User } from "lucide-react";
+
 import {
   Table,
   TableBody,
@@ -15,25 +17,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { formatDistanceToNow } from "date-fns";
-
-interface User {
-  id: string;
-  name: string | null;
-}
-
-interface Task {
-  id: string;
-  name: string;
-  status: string;
-  assignedTo: User | null;
-  updatedAt: string;
-}
 
 interface TasksTableProps {
   projectId: string;
-  tasks: Task[];
+  tasks: {
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    assignedTo: {
+      id: string;
+      name: string | null;
+    } | null;
+    createdAt: string;
+  }[];
 }
 
 /**
@@ -58,57 +57,69 @@ function getStatusVariant(status: string) {
  * Tasks table component
  */
 export function TasksTable({ projectId, tasks }: TasksTableProps) {
-  const router = useRouter();
-
-  /**
-   * Handles clicking a task row
-   */
-  const handleTaskClick = (taskId: string) => {
-    router.push(`/projects/${projectId}/tasks/${taskId}`);
-  };
-
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Task</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Assigned To</TableHead>
-          <TableHead>Last Updated</TableHead>
+          <TableHead>Assignee</TableHead>
+          <TableHead>Created</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {tasks.map((task) => (
-          <TableRow
-            key={task.id}
-            className="cursor-pointer hover:bg-muted/50"
-            onClick={() => handleTaskClick(task.id)}
-          >
-            <TableCell className="font-medium">{task.name}</TableCell>
-            <TableCell>
-              <Badge variant={getStatusVariant(task.status)}>
-                {task.status.toLowerCase().replace("_", " ")}
-              </Badge>
-            </TableCell>
-            <TableCell>
-              {task.assignedTo ? (
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback>
-                      {task.assignedTo.name?.[0]?.toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span>{task.assignedTo.name}</span>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">Unassigned</span>
-              )}
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true })}
+        {tasks.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={4} className="text-center">
+              No tasks found.
             </TableCell>
           </TableRow>
-        ))}
+        ) : (
+          tasks.map((task) => (
+            <TableRow key={task.id}>
+              <TableCell>
+                <Link
+                  href={`/projects/${projectId}/tasks/${task.id}`}
+                  className="hover:underline"
+                >
+                  <div className="font-medium">{task.name}</div>
+                  {task.description && (
+                    <div className="text-sm text-muted-foreground">
+                      {task.description}
+                    </div>
+                  )}
+                </Link>
+              </TableCell>
+              <TableCell>
+                <Badge variant={getStatusVariant(task.status)}>
+                  {task.status.toLowerCase().replace("_", " ")}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                {task.assignedTo ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback>
+                        {task.assignedTo.name?.[0]?.toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm">{task.assignedTo.name}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <User className="h-4 w-4" />
+                    <span className="text-sm">Unassigned</span>
+                  </div>
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {formatDistanceToNow(new Date(task.createdAt), {
+                  addSuffix: true,
+                })}
+              </TableCell>
+            </TableRow>
+          ))
+        )}
       </TableBody>
     </Table>
   );

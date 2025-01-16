@@ -44,6 +44,15 @@ export async function createProjectFromWorkflow(options: CreateProjectOptions) {
   // Validate options based on project type
   validateProjectOptions(options);
 
+  // Verify manager exists
+  const manager = await prisma.user.findUnique({
+    where: { id: options.managerId }
+  });
+
+  if (!manager) {
+    throw new Error("Invalid manager ID");
+  }
+
   // Start a transaction to ensure all related records are created
   return await prisma.$transaction(async (tx) => {
     // 1. Create the project
@@ -104,7 +113,8 @@ export async function createProjectFromWorkflow(options: CreateProjectOptions) {
             priority: task.priority,
             manHours: task.manHours,
             order: task.order,
-            projectPhaseId: projectPhase.id,
+            projectId: project.id,
+            phaseId: projectPhase.id,
             workflowTaskId: task.id,
             departmentId: task.departmentId,
           },
@@ -121,8 +131,9 @@ export async function createProjectFromWorkflow(options: CreateProjectOptions) {
           await tx.formInstance.create({
             data: {
               templateId: formTemplate.id,
-              versionId: formTemplate.currentVersion,
+              versionId: formTemplate.currentVersion.toString(),
               projectId: project.id,
+              projectTaskId: project.id, // This needs to be associated with a specific task
               status: "ACTIVE",
             },
           });

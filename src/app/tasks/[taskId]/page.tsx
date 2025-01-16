@@ -1,6 +1,6 @@
 /**
- * @file projects/[projectId]/tasks/[taskId]/page.tsx
- * @description Task details page component
+ * @file tasks/[taskId]/page.tsx
+ * @description Standalone task details page component
  */
 
 import { notFound } from "next/navigation";
@@ -12,7 +12,6 @@ import { TaskDetails } from "@/components/projects/TaskDetails";
 
 interface TaskPageProps {
   params: {
-    projectId: string;
     taskId: string;
   };
 }
@@ -20,11 +19,11 @@ interface TaskPageProps {
 /**
  * Fetches task data with all related information
  */
-async function getTask(projectId: string, taskId: string) {
+async function getTask(taskId: string) {
   const task = await prisma.projectTask.findUnique({
     where: {
       id: taskId,
-      projectId: projectId,
+      project: null, // Only fetch tasks not tied to a project
     },
     include: {
       assignedTo: true,
@@ -62,7 +61,7 @@ async function getUsers() {
 }
 
 /**
- * Task details page component
+ * Standalone task details page component
  */
 export default async function TaskPage({ params }: TaskPageProps) {
   const session = await getServerSession(authOptions);
@@ -72,7 +71,7 @@ export default async function TaskPage({ params }: TaskPageProps) {
   }
 
   const [task, users] = await Promise.all([
-    getTask(params.projectId, params.taskId),
+    getTask(params.taskId),
     getUsers(),
   ]);
 
@@ -80,7 +79,6 @@ export default async function TaskPage({ params }: TaskPageProps) {
     <div className="container mx-auto py-10">
       <TaskDetails
         taskId={task.id}
-        projectId={params.projectId}
         name={task.name}
         description={task.description}
         status={task.status}

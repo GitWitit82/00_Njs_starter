@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 
 import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { createProjectFromWorkflow } from "@/lib/services/project.service"
 
 /**
@@ -27,8 +28,29 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
     
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+    if (!session?.user?.id) {
+      return new NextResponse(
+        JSON.stringify({ error: "You must be logged in to create a project" }), 
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Verify user exists and has permission
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    });
+
+    if (!user) {
+      return new NextResponse(
+        JSON.stringify({ error: "User not found" }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
 
     const json = await req.json()
@@ -37,8 +59,13 @@ export async function POST(req: Request) {
     // Additional validation for vehicle wrap projects
     if (body.projectType === "VEHICLE_WRAP" && !body.vinNumber) {
       return new NextResponse(
-        "VIN number is required for vehicle wrap projects",
-        { status: 400 }
+        JSON.stringify({ 
+          error: "VIN number is required for vehicle wrap projects" 
+        }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       )
     }
 
@@ -50,11 +77,32 @@ export async function POST(req: Request) {
     return NextResponse.json(project)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+      return new NextResponse(
+        JSON.stringify({ 
+          error: "Validation error", 
+          details: error.errors 
+        }), 
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
 
-    console.error("[PROJECTS]", error)
-    return new NextResponse("Internal Server Error", { status: 500 })
+    console.error("[PROJECTS_CREATE]", {
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+      timestamp: new Date().toISOString(),
+    })
+
+    const errorMessage = error instanceof Error ? error.message : "Failed to create project"
+    
+    return new NextResponse(
+      JSON.stringify({ error: errorMessage }), 
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
 }
 
@@ -100,7 +148,14 @@ export async function GET(req: Request) {
 
     return NextResponse.json(projects)
   } catch (error) {
-    console.error("[PROJECTS]", error)
-    return new NextResponse("Internal Server Error", { status: 500 })
+    console.error("[PROJECTS_LIST]", {
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+      timestamp: new Date().toISOString(),
+    })
+
+    return new NextResponse(
+      JSON.stringify({ error: "Failed to fetch projects" }), 
+      { status: 500 }
+    )
   }
 } 

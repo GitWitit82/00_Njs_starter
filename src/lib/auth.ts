@@ -3,10 +3,10 @@ import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db),
+  adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -16,7 +16,6 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
     error: "/auth/error",
   },
-  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -29,9 +28,16 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Invalid credentials")
         }
 
-        const user = await db.user.findUnique({
+        const user = await prisma.user.findUnique({
           where: {
             name: credentials.name
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            hashedPassword: true,
           }
         })
 
@@ -58,24 +64,30 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async session({ token, session }) {
-      if (token) {
-        session.user.id = token.id
-        session.user.name = token.name
-        session.user.email = token.email
-        session.user.role = token.role
+    async jwt({ token, user, trigger, session }) {
+      if (trigger === "update" && session?.name) {
+        token.name = session.name
       }
-
-      return session
-    },
-    async jwt({ token, user }) {
+      
       if (user) {
         token.id = user.id
+        token.name = user.name
         token.email = user.email
         token.role = user.role
       }
-
+      
       return token
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user = {
+          id: token.id as string,
+          name: token.name,
+          email: token.email,
+          role: token.role as string,
+        }
+      }
+      return session
     }
   },
   debug: process.env.NODE_ENV === "development",
