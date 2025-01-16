@@ -701,16 +701,16 @@ export function TasksDataTable({ tasks: initialTasks }: TasksDataTableProps) {
             )}
 
             <Select
-              value={(table.getColumn("status")?.getFilterValue() as string) ?? ""}
+              value={(table.getColumn("status")?.getFilterValue() as string) ?? "all"}
               onValueChange={(value) => {
-                table.getColumn("status")?.setFilterValue(value);
+                table.getColumn("status")?.setFilterValue(value === "all" ? "" : value);
               }}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 {TASK_STATUSES.map((status) => (
                   <SelectItem key={status} value={status}>
                     {status.toLowerCase().replace("_", " ")}
@@ -719,16 +719,16 @@ export function TasksDataTable({ tasks: initialTasks }: TasksDataTableProps) {
               </SelectContent>
             </Select>
             <Select
-              value={(table.getColumn("department")?.getFilterValue() as string) ?? ""}
+              value={(table.getColumn("department")?.getFilterValue() as string) ?? "all"}
               onValueChange={(value) => {
-                table.getColumn("department")?.setFilterValue(value);
+                table.getColumn("department")?.setFilterValue(value === "all" ? "" : value);
               }}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Departments</SelectItem>
+                <SelectItem value="all">All Departments</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept} value={dept}>
                     {dept}
@@ -737,16 +737,16 @@ export function TasksDataTable({ tasks: initialTasks }: TasksDataTableProps) {
               </SelectContent>
             </Select>
             <Select
-              value={(table.getColumn("assignedTo")?.getFilterValue() as string) ?? ""}
+              value={(table.getColumn("assignedTo")?.getFilterValue() as string) ?? "all"}
               onValueChange={(value) => {
-                table.getColumn("assignedTo")?.setFilterValue(value);
+                table.getColumn("assignedTo")?.setFilterValue(value === "all" ? "" : value);
               }}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by assignee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Assignees</SelectItem>
+                <SelectItem value="all">All Assignees</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {assignees.map((assignee) => (
                   <SelectItem key={assignee} value={assignee}>
@@ -756,16 +756,16 @@ export function TasksDataTable({ tasks: initialTasks }: TasksDataTableProps) {
               </SelectContent>
             </Select>
             <Select
-              value={(table.getColumn("priority")?.getFilterValue() as string) ?? ""}
+              value={(table.getColumn("priority")?.getFilterValue() as string) ?? "all"}
               onValueChange={(value) => {
-                table.getColumn("priority")?.setFilterValue(value);
+                table.getColumn("priority")?.setFilterValue(value === "all" ? "" : value);
               }}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priorities</SelectItem>
+                <SelectItem value="all">All Priorities</SelectItem>
                 {TASK_PRIORITIES.map((priority) => (
                   <SelectItem key={priority.value} value={priority.value}>
                     <div className="flex items-center gap-2">

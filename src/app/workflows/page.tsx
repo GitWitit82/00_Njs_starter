@@ -1,106 +1,66 @@
-"use client"
+/**
+ * @file workflows/page.tsx
+ * @description Workflows listing page component
+ */
 
-import { useEffect, useState } from "react"
-import { Workflow } from "@prisma/client"
-import { Plus } from "lucide-react"
+import { Suspense } from 'react';
+import { getServerSession } from 'next-auth';
+import { notFound } from 'next/navigation';
+import { prisma } from '@/lib/prisma';
+import { WorkflowsTable } from '@/components/workflows/workflows-table';
 
-import { useAuth } from "@/hooks/use-auth"
-import { Button } from "@/components/ui/button"
-import { Breadcrumb } from "@/components/ui/breadcrumb"
-import { WorkflowsTable } from "@/components/workflows/workflows-table"
-import { WorkflowModal } from "@/components/workflows/workflow-modal"
+/**
+ * Fetches workflows data directly from the database
+ */
+async function getWorkflows() {
+  try {
+    const workflows = await prisma.workflow.findMany({
+      include: {
+        phases: {
+          include: {
+            tasks: true,
+          },
+        },
+        formTemplates: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-export default function WorkflowsPage() {
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+    return workflows;
+  } catch (error) {
+    console.error('Failed to fetch workflows:', error);
+    return [];
+  }
+}
 
-  const { isAuthenticated } = useAuth({ requiredRole: "MANAGER" })
-
-  const fetchWorkflows = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch("/api/workflows")
-      if (!response.ok) throw new Error("Failed to fetch workflows")
-      const data = await response.json()
-      setWorkflows(data)
-    } catch (error) {
-      console.error("Error:", error)
-      setError("Failed to load workflows")
-    } finally {
-      setIsLoading(false)
-    }
+/**
+ * Workflows page component
+ */
+export default async function WorkflowsPage() {
+  const session = await getServerSession();
+  
+  if (!session) {
+    notFound();
   }
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchWorkflows()
-    }
-  }, [isAuthenticated])
+  const workflows = await getWorkflows();
 
-  const handleWorkflowSuccess = (workflow: Workflow) => {
-    setModalOpen(false)
-    fetchWorkflows()
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-[450px] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold">Loading workflows...</h2>
+  return (
+    <div className="container mx-auto py-10">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
           <p className="text-sm text-muted-foreground">
-            Please wait while we fetch the workflow data.
+            Manage workflow templates and their phases
           </p>
         </div>
       </div>
-    )
-  }
 
-  if (error) {
-    return (
-      <div className="flex h-[450px] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-destructive">Error</h2>
-          <p className="text-sm text-muted-foreground">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="container py-6">
-      <div className="mb-8">
-        <Breadcrumb
-          items={[
-            { title: "Workflows", href: "/workflows" }
-          ]}
-        />
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Workflows</h1>
-            <p className="text-muted-foreground">
-              Create and manage workflow templates.
-            </p>
-          </div>
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Workflow
-          </Button>
-        </div>
-      </div>
-
-      <WorkflowsTable
-        workflows={workflows}
-        isLoading={isLoading}
-        onWorkflowChange={fetchWorkflows}
-      />
-
-      <WorkflowModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        onSuccess={handleWorkflowSuccess}
-      />
+      <Suspense fallback={<div>Loading workflows...</div>}>
+        <WorkflowsTable initialData={workflows} />
+      </Suspense>
     </div>
-  )
+  );
 } 

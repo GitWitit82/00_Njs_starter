@@ -108,13 +108,13 @@ async function getProject(id: string) {
  * Project details page component
  */
 export default async function ProjectPage({ params }: ProjectPageProps) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user) {
-    return null;
+  const { projectId } = params;
+
+  if (!projectId) {
+    notFound();
   }
 
-  const project = await getProject(params.projectId);
+  const project = await getProject(projectId);
   const progress = calculateProgress(project.phases);
 
   return (

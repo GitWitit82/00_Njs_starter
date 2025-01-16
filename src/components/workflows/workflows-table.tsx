@@ -1,13 +1,12 @@
-"use client"
+'use client';
 
-import * as React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Phase, Workflow } from "@prisma/client"
-import { formatDistanceToNow } from "date-fns"
-import { ChevronDown, ChevronRight, Edit, Plus, Trash2 } from "lucide-react"
+/**
+ * @file components/workflows/workflows-table.tsx
+ * @description Table component for displaying workflows
+ */
 
-import { Button } from "@/components/ui/button"
+import { useState } from 'react';
+import { Workflow } from '@prisma/client';
 import {
   Table,
   TableBody,
@@ -15,178 +14,93 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { WorkflowModal } from "@/components/workflows/workflow-modal"
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Plus, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface WorkflowsTableProps {
-  workflows: (Workflow & { phases: Phase[] })[]
-  isLoading: boolean
-  onWorkflowChange: () => void
+  initialData: Workflow[];
 }
 
-export function WorkflowsTable({
-  workflows,
-  isLoading,
-  onWorkflowChange,
-}: WorkflowsTableProps) {
-  const router = useRouter()
-  const [expandedWorkflows, setExpandedWorkflows] = useState<string[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+/**
+ * WorkflowsTable component
+ */
+export function WorkflowsTable({ initialData }: WorkflowsTableProps) {
+  const [workflows, setWorkflows] = useState<Workflow[]>(initialData);
 
-  const toggleExpand = (workflowId: string) => {
-    setExpandedWorkflows((prev) =>
-      prev.includes(workflowId)
-        ? prev.filter((id) => id !== workflowId)
-        : [...prev, workflowId]
-    )
-  }
-
-  const handleEdit = (workflow: Workflow) => {
-    setSelectedWorkflow(workflow)
-    setModalOpen(true)
-  }
-
-  const handleDelete = async (workflowId: string) => {
-    if (!confirm("Are you sure you want to delete this workflow?")) return
-
+  const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/workflows/${workflowId}`, {
-        method: "DELETE",
-      })
+      const response = await fetch(`/api/workflows/${id}`, {
+        method: 'DELETE',
+      });
 
-      if (!response.ok) throw new Error("Failed to delete workflow")
+      if (!response.ok) {
+        throw new Error('Failed to delete workflow');
+      }
 
-      onWorkflowChange()
+      const { data } = await response.json();
+      setWorkflows(workflows.filter((workflow) => workflow.id !== id));
     } catch (error) {
-      console.error("Error:", error)
-      setError("Failed to delete workflow")
+      console.error('Error deleting workflow:', error);
     }
-  }
-
-  const handleWorkflowSuccess = (workflow: Workflow) => {
-    setModalOpen(false)
-    setSelectedWorkflow(null)
-    onWorkflowChange()
-  }
-
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
+  };
 
   return (
-    <div className="space-y-4">
-      {error && (
-        <div className="rounded-md bg-destructive/15 p-4 text-destructive">
-          {error}
-        </div>
-      )}
-
+    <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[40px]"></TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Phases</TableHead>
-            <TableHead className="w-[100px]"></TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {workflows.map((workflow) => (
-            <React.Fragment key={workflow.id}>
-              <TableRow>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => toggleExpand(workflow.id)}
-                  >
-                    {expandedWorkflows.includes(workflow.id) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                </TableCell>
-                <TableCell className="font-medium">{workflow.name}</TableCell>
-                <TableCell className="text-muted-foreground">{workflow.description || "No description"}</TableCell>
-                <TableCell>{workflow.phases.length}</TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(workflow)}
-                    >
-                      <Edit className="h-4 w-4" />
-                      <span className="sr-only">Edit workflow</span>
+            <TableRow key={workflow.id}>
+              <TableCell className="font-medium">{workflow.name}</TableCell>
+              <TableCell>{workflow.description}</TableCell>
+              <TableCell>
+                <Badge variant={workflow.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                  {workflow.status}
+                </Badge>
+              </TableCell>
+              <TableCell>{workflow.phases?.length || 0}</TableCell>
+              <TableCell>
+                {new Date(workflow.createdAt).toLocaleDateString()}
+              </TableCell>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreHorizontal className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
                       onClick={() => handleDelete(workflow.id)}
+                      className="text-destructive"
                     >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete workflow</span>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-              {expandedWorkflows.includes(workflow.id) && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <div className="pl-12 py-4">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-sm font-medium">Phases</h3>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/workflows/${workflow.id}/phases`)}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Manage Phases
-                        </Button>
-                      </div>
-                      {workflow.phases.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          No phases yet. Click the button above to add phases.
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {workflow.phases.map((phase) => (
-                            <div
-                              key={phase.id}
-                              className="flex items-center justify-between rounded-md border p-2"
-                            >
-                              <span className="text-sm">{phase.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => router.push(`/workflows/${workflow.id}/phases/${phase.id}/tasks`)}
-                              >
-                                View Tasks
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </React.Fragment>
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
           ))}
         </TableBody>
       </Table>
-
-      <WorkflowModal
-        workflow={selectedWorkflow}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        onSuccess={handleWorkflowSuccess}
-      />
     </div>
-  )
+  );
 } 

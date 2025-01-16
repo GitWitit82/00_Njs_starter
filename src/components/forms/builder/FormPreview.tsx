@@ -87,8 +87,11 @@ export function FormPreview({ formData, departments = [] }: FormPreviewProps) {
                         <SelectValue placeholder="Select an option" />
                       </SelectTrigger>
                       <SelectContent>
-                        {item.options?.map((option, index) => (
-                          <SelectItem key={index} value={option}>
+                        {item.options?.filter(Boolean).map((option, index) => (
+                          <SelectItem 
+                            key={index} 
+                            value={option}
+                          >
                             {option}
                           </SelectItem>
                         ))}
@@ -114,7 +117,7 @@ export function FormPreview({ formData, departments = [] }: FormPreviewProps) {
 
                   {item.type === "RADIO" && item.options && (
                     <RadioGroup disabled>
-                      {item.options.map((option, index) => (
+                      {item.options.filter(Boolean).map((option, index) => (
                         <div key={index} className="flex items-center space-x-2">
                           <RadioGroupItem value={option} id={`${item.id}-${index}`} />
                           <label

@@ -54,6 +54,13 @@ export default async function TasksPage() {
 
   const tasks = await getTasks();
 
+  // Assert the tasks array to match the expected Task type
+  const typedTasks = tasks.map(task => ({
+    ...task,
+    priority: task.priority as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+    createdAt: task.createdAt.toISOString()
+  }));
+
   return (
     <div className="container mx-auto py-10">
       <div className="mb-8">
@@ -69,7 +76,7 @@ export default async function TasksPage() {
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div>Loading tasks...</div>}>
-            <TasksDataTable tasks={tasks} />
+            <TasksDataTable tasks={typedTasks} />
           </Suspense>
         </CardContent>
       </Card>

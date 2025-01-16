@@ -116,29 +116,36 @@ export function SidebarNav({ isCollapsed }: SidebarNavProps) {
 
     return (
       <div key={route.href}>
-        <Link
-          href={hasSubroutes ? "#" : route.href}
-          onClick={hasSubroutes ? (e) => {
-            e.preventDefault()
-            toggleExpand(route.href)
-          } : undefined}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-            isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-            isCollapsed && "justify-center",
-            isSubroute && "ml-6",
-          )}
-        >
-          <route.icon className="h-4 w-4" />
-          {!isCollapsed && (
-            <>
+        <div className="flex items-center">
+          <Link
+            href={route.href}
+            className={cn(
+              "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+              isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+              isCollapsed && "justify-center",
+              isSubroute && "ml-6",
+            )}
+          >
+            <route.icon className="h-4 w-4" />
+            {!isCollapsed && (
               <span className="flex-1">{route.label}</span>
-              {hasSubroutes && (
-                isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+            )}
+          </Link>
+          {!isCollapsed && hasSubroutes && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => toggleExpand(route.href)}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
               )}
-            </>
+            </Button>
           )}
-        </Link>
+        </div>
         {!isCollapsed && hasSubroutes && isExpanded && (
           <div className="mt-1">
             {route.subroutes?.map((subroute) => renderRoute(subroute, true))}
