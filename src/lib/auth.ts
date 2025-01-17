@@ -30,13 +30,13 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.password) {
-          throw new Error("User not found")
+          throw new Error("Invalid username or password")
         }
 
         const isValid = await bcrypt.compare(credentials.password, user.password)
 
         if (!isValid) {
-          throw new Error("Invalid password")
+          throw new Error("Invalid username or password")
         }
 
         return {

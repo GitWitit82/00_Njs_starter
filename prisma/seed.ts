@@ -11,7 +11,7 @@ async function main() {
     create: {
       name: "admin",
       email: "admin@example.com",
-      hashedPassword: await hash("1234", 10),
+      password: await hash("admin123", 10),
       role: "ADMIN",
     },
   });

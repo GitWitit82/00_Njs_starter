@@ -5,30 +5,35 @@ import bcrypt from "bcryptjs"
 
 export async function GET() {
   try {
-    // Check if admin user already exists
-    const existingAdmin = await prisma.user.findUnique({
+    // Delete existing admin user if exists
+    await prisma.user.deleteMany({
       where: { name: "admin" }
     })
 
-    if (existingAdmin) {
-      return NextResponse.json({ message: "Admin user already exists" })
-    }
-
-    // Create admin user
-    const hashedPassword = await bcrypt.hash("1234", 10)
+    // Create admin user with simple password
+    const password = "1234"
+    const hashedPassword = await bcrypt.hash(password, 10)
     
     const admin = await prisma.user.create({
       data: {
         name: "admin",
-        email: "admin@example.com",
         password: hashedPassword,
         role: Role.ADMIN
       }
     })
 
-    return NextResponse.json({ message: "Admin user created successfully", user: admin })
+    return NextResponse.json({ 
+      message: "Admin user created successfully", 
+      user: {
+        name: admin.name,
+        role: admin.role
+      }
+    })
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ message: "Failed to create admin user" }, { status: 500 })
+    console.error("Error creating admin user:", error)
+    return NextResponse.json(
+      { message: "Failed to create admin user", error: String(error) }, 
+      { status: 500 }
+    )
   }
 } 
