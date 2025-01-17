@@ -1,101 +1,65 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
-import { FormTemplate, Department } from "@prisma/client"
-import { FormTemplateList } from "@/components/forms/templates/FormTemplateList"
+import { toast } from "sonner"
+import { FormSchema } from "@/types/forms"
+import { FormBuilder } from "@/components/forms/builder/FormBuilder"
 
-interface FormTemplateWithDepartment extends FormTemplate {
-  department: Pick<Department, "id" | "name" | "color"> | null
+interface FormTemplatesWrapperProps {
+  templateId: string
+  initialData: FormSchema | null
 }
 
-interface FormTemplateListWrapperProps {
-  templates: FormTemplateWithDepartment[]
+interface SaveFormData {
+  schema: FormSchema
+  notes: string
 }
 
 /**
- * Client-side wrapper for form template list
- * Handles template management operations (edit/delete/preview)
+ * FormTemplatesWrapper component for managing form template creation and editing
+ * @param {FormTemplatesWrapperProps} props - Component props
+ * @returns {JSX.Element} Rendered component
  */
-export function FormTemplateListWrapper({
-  templates,
-}: FormTemplateListWrapperProps) {
+export function FormTemplatesWrapper({
+  templateId,
+  initialData,
+}: FormTemplatesWrapperProps) {
   const router = useRouter()
-  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
 
-  /**
-   * Navigate to template edit page
-   */
-  const handleEdit = (template: FormTemplate) => {
-    router.push(`/forms/templates/${template.id}`)
-  }
-
-  /**
-   * Navigate to template preview page
-   */
-  const handlePreview = (template: FormTemplate) => {
-    router.push(`/forms/templates/${template.id}/preview`)
-  }
-
-  /**
-   * Delete a form template
-   */
-  const handleDelete = async (template: FormTemplate) => {
-    if (!template?.id) {
-      toast({
-        title: "Error",
-        description: "Invalid template ID",
-        variant: "destructive",
-      })
-      return
-    }
-
+  const handleSave = async (data: SaveFormData) => {
     try {
-      // Confirm deletion
-      if (!confirm("Are you sure you want to delete this template?")) return
+      setIsLoading(true)
 
-      // Check for existing instances
-      const instancesResponse = await fetch(`/api/forms/templates/${template.id}/instances`)
-      const instancesData = await instancesResponse.json()
-
-      if (instancesData.count > 0) {
-        if (!confirm(`This template has ${instancesData.count} instances. Deleting it will also delete all instances. Continue?`)) {
-          return
-        }
-      }
-
-      // Delete template
-      const response = await fetch(`/api/forms/templates/${template.id}`, {
-        method: "DELETE",
+      const response = await fetch(`/api/forms/templates/${templateId}/versions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       })
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Failed to delete template")
+        throw new Error("Failed to save form template")
       }
 
-      toast({
-        title: "Success",
-        description: "Form template deleted successfully",
-      })
-
+      toast.success("Form template saved successfully")
       router.refresh()
-    } catch (error: any) {
-      console.error("Error:", error)
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to delete template",
-        variant: "destructive",
-      })
+    } catch (error) {
+      toast.error("Failed to save form template")
+      console.error(error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <FormTemplateList
-      templates={templates}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-      onPreview={handlePreview}
+    <FormBuilder
+      templateId={templateId}
+      initialData={initialData}
+      onSave={handleSave}
+      isLoading={isLoading}
     />
   )
 } 

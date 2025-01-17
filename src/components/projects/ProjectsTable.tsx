@@ -6,6 +6,7 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { ProjectStatus } from "@prisma/client";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { getStatusVariant } from "@/lib/utils/ui";
 
 interface Project {
   id: string;
@@ -25,7 +27,7 @@ interface Project {
   description: string | null;
   projectType: "VEHICLE_WRAP" | "SIGN" | "MURAL";
   customerName: string;
-  status: string;
+  status: ProjectStatus;
   startDate: Date;
   endDate: Date | null;
   workflow: {
@@ -64,26 +66,6 @@ function calculateProgress(project: Project): number {
   );
 
   return Math.round((completedTasks / totalTasks) * 100);
-}
-
-/**
- * Gets the appropriate badge variant based on project status
- */
-function getStatusVariant(status: string) {
-  switch (status) {
-    case "PLANNING":
-      return "secondary";
-    case "IN_PROGRESS":
-      return "default";
-    case "ON_HOLD":
-      return "warning";
-    case "COMPLETED":
-      return "success";
-    case "CANCELLED":
-      return "destructive";
-    default:
-      return "secondary";
-  }
 }
 
 /**

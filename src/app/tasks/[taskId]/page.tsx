@@ -79,6 +79,7 @@ export default async function TaskPage({ params }: TaskPageProps) {
     <div className="container mx-auto py-10">
       <TaskDetails
         taskId={task.id}
+        projectId={task.projectId || "standalone"}
         name={task.name}
         description={task.description}
         status={task.status}

@@ -1,199 +1,313 @@
-import { useState } from "react"
-import { StandardFormTemplate } from "./StandardFormTemplate"
+'use client'
 
-interface ChecklistTask {
-  id: string
-  text: string
-  isCompleted: boolean
-}
-
-interface HeaderOption {
-  id: string
-  label: string
-  type: "checkbox" | "radio"
-  color?: string
-  options?: { id: string; label: string }[]
-  onChange?: (value: any) => void
-}
-
-interface HeaderControl {
-  id: string
-  label: string
-  type: "options" | "group"
-  options?: HeaderOption[]
-  controls?: HeaderControl[]
-}
+import { useCallback, useState } from "react"
+import { FormSchema } from "@/types/form"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Plus, Trash } from "lucide-react"
 
 interface StandardChecklistProps {
+  initialData?: FormSchema
+  onSubmit: (data: FormSchema) => Promise<void>
+  isLoading?: boolean
+}
+
+interface ChecklistItem {
+  id: string
+  label: string
+  required: boolean
+}
+
+interface ChecklistSection {
+  id: string
   title: string
-  departmentColor?: string
-  description?: string
-  tasks: ChecklistTask[]
-  headerControls?: HeaderControl[]
-  projectDetails?: {
-    enabled: boolean
-    fields?: any[]
+  description: string
+  items: ChecklistItem[]
+}
+
+interface ChecklistData {
+  sections: ChecklistSection[]
+  metadata: {
+    title: string
+    description: string
   }
-  approval?: {
-    enabled: boolean
-    fields?: any[]
-  }
-  onTaskComplete?: (taskId: string, isCompleted: boolean) => void
-  onDataChange?: (data: any) => void
 }
 
 /**
- * Standard checklist component that provides consistent styling for all checklists
+ * StandardChecklist component for creating checklist templates
+ * @param {StandardChecklistProps} props - Component props
+ * @returns {JSX.Element} Rendered component
  */
 export function StandardChecklist({
-  title,
-  departmentColor,
-  description,
-  tasks,
-  headerControls = [],
-  projectDetails,
-  approval,
-  onTaskComplete,
-  onDataChange,
+  initialData,
+  onSubmit,
+  isLoading = false,
 }: StandardChecklistProps) {
-  const [checkedTasks, setCheckedTasks] = useState<string[]>([])
-  const [headerData, setHeaderData] = useState<Record<string, any>>({})
-
-  const handleTaskCheck = (taskId: string) => {
-    setCheckedTasks((prev) => {
-      const newChecked = prev.includes(taskId)
-        ? prev.filter((id) => id !== taskId)
-        : [...prev, taskId]
-      onTaskComplete?.(taskId, !prev.includes(taskId))
-      return newChecked
-    })
-  }
-
-  const handleHeaderOptionChange = (controlId: string, optionId: string, value: any) => {
-    const newData = {
-      ...headerData,
-      [controlId]: {
-        ...headerData[controlId],
-        [optionId]: value,
+  const [formData, setFormData] = useState<ChecklistData>(
+    initialData || {
+      sections: [
+        {
+          id: crypto.randomUUID(),
+          title: "",
+          description: "",
+          items: [],
+        },
+      ],
+      metadata: {
+        title: "",
+        description: "",
       },
     }
-    setHeaderData(newData)
-    onDataChange?.(newData)
-  }
+  )
 
-  const renderHeaderOption = (option: HeaderOption, controlId: string) => {
-    if (option.type === "checkbox") {
-      return (
-        <label key={option.id} className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            className="h-5 w-5 border-2"
-            checked={headerData[controlId]?.[option.id] || false}
-            onChange={(e) =>
-              handleHeaderOptionChange(controlId, option.id, e.target.checked)
-            }
-          />
-          <span
-            className={`font-bold ${
-              option.color ? `text-${option.color}` : "text-white"
-            }`}
-          >
-            {option.label}
-          </span>
-        </label>
-      )
+  const handleAddSection = useCallback(() => {
+    const newSection: ChecklistSection = {
+      id: crypto.randomUUID(),
+      title: "",
+      description: "",
+      items: [],
     }
+    setFormData((prev) => ({
+      ...prev,
+      sections: [...prev.sections, newSection],
+    }))
+  }, [])
 
-    if (option.type === "radio" && option.options) {
-      return (
-        <div key={option.id} className="flex items-center gap-4">
-          <span className="font-bold text-white">{option.label}:</span>
-          {option.options.map((opt) => (
-            <label key={opt.id} className="flex items-center gap-1">
-              <input
-                type="radio"
-                className="h-4 w-4"
-                name={`${controlId}-${option.id}`}
-                checked={headerData[controlId]?.[option.id] === opt.id}
-                onChange={() =>
-                  handleHeaderOptionChange(controlId, option.id, opt.id)
-                }
-              />
-              <span className="text-white">{opt.label}</span>
-            </label>
-          ))}
-        </div>
-      )
-    }
-  }
+  const handleUpdateSection = useCallback(
+    (index: number, updates: Partial<ChecklistSection>) => {
+      setFormData((prev) => ({
+        ...prev,
+        sections: prev.sections.map((section, i) =>
+          i === index ? { ...section, ...updates } : section
+        ),
+      }))
+    },
+    []
+  )
 
-  const renderHeaderControl = (control: HeaderControl) => {
-    if (control.type === "options" && control.options) {
-      return (
-        <div key={control.id} className="space-y-2">
-          {control.options.map((option) =>
-            renderHeaderOption(option, control.id)
-          )}
-        </div>
-      )
-    }
+  const handleDeleteSection = useCallback(
+    (index: number) => {
+      setFormData((prev) => ({
+        ...prev,
+        sections: prev.sections.filter((_, i) => i !== index),
+      }))
+    },
+    []
+  )
 
-    if (control.type === "group" && control.controls) {
-      return (
-        <div key={control.id} className="space-y-2">
-          <span className="font-bold text-white">{control.label}</span>
-          <div className="flex gap-4">
-            {control.controls.map(renderHeaderControl)}
-          </div>
-        </div>
-      )
-    }
+  const handleAddItem = useCallback(
+    (sectionIndex: number) => {
+      const newItem: ChecklistItem = {
+        id: crypto.randomUUID(),
+        label: "",
+        required: false,
+      }
+      setFormData((prev) => ({
+        ...prev,
+        sections: prev.sections.map((section, index) =>
+          index === sectionIndex
+            ? {
+                ...section,
+                items: [...section.items, newItem],
+              }
+            : section
+        ),
+      }))
+    },
+    []
+  )
+
+  const handleUpdateItem = useCallback(
+    (sectionIndex: number, itemIndex: number, updates: Partial<ChecklistItem>) => {
+      setFormData((prev) => ({
+        ...prev,
+        sections: prev.sections.map((section, index) =>
+          index === sectionIndex
+            ? {
+                ...section,
+                items: section.items.map((item, i) =>
+                  i === itemIndex ? { ...item, ...updates } : item
+                ),
+              }
+            : section
+        ),
+      }))
+    },
+    []
+  )
+
+  const handleDeleteItem = useCallback(
+    (sectionIndex: number, itemIndex: number) => {
+      setFormData((prev) => ({
+        ...prev,
+        sections: prev.sections.map((section, index) =>
+          index === sectionIndex
+            ? {
+                ...section,
+                items: section.items.filter((_, i) => i !== itemIndex),
+              }
+            : section
+        ),
+      }))
+    },
+    []
+  )
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await onSubmit(formData as unknown as FormSchema)
   }
 
   return (
-    <StandardFormTemplate
-      title={title}
-      departmentColor={departmentColor}
-      description={description}
-      projectDetails={projectDetails}
-      approval={approval}
-      headerControls={
-        <div className="space-y-2">
-          {headerControls.map(renderHeaderControl)}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="form-title">Checklist Title</Label>
+            <Input
+              id="form-title"
+              value={formData.metadata.title}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  metadata: { ...prev.metadata, title: e.target.value },
+                }))
+              }
+              placeholder="Enter checklist title"
+              disabled={isLoading}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="form-description">Description</Label>
+            <Textarea
+              id="form-description"
+              value={formData.metadata.description}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  metadata: { ...prev.metadata, description: e.target.value },
+                }))
+              }
+              placeholder="Enter checklist description"
+              disabled={isLoading}
+            />
+          </div>
         </div>
-      }
-      onDataChange={onDataChange}
-    >
-      <div className="mt-6">
-        <div 
-          className="text-white p-2 text-center font-bold"
-          style={{ backgroundColor: departmentColor || "#000000" }}
-        >
-          TASKS
-        </div>
+      </Card>
 
-        <div className="border border-black">
-          {tasks.map((task, index) => (
-            <div
-              key={task.id}
-              className="flex border-b border-black last:border-b-0"
-            >
-              <div className="w-12 p-2 border-r border-black text-center font-bold">
-                {index + 1}
-              </div>
-              <div className="w-12 p-2 border-r border-black flex items-center justify-center">
-                <div
-                  onClick={() => handleTaskCheck(task.id)}
-                  className={`w-6 h-6 border-2 border-black rounded-full cursor-pointer ${
-                    checkedTasks.includes(task.id) ? "bg-black" : "bg-white"
-                  }`}
+      {formData.sections.map((section, sectionIndex) => (
+        <Card key={section.id} className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <Label htmlFor={`section-${sectionIndex}-title`}>
+                  Section Title
+                </Label>
+                <Input
+                  id={`section-${sectionIndex}-title`}
+                  value={section.title}
+                  onChange={(e) =>
+                    handleUpdateSection(sectionIndex, { title: e.target.value })
+                  }
+                  placeholder="Enter section title"
+                  disabled={isLoading}
+                  required
                 />
               </div>
-              <div className="flex-1 p-2 text-sm">{task.text}</div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDeleteSection(sectionIndex)}
+                disabled={isLoading || formData.sections.length <= 1}
+                aria-label={`Delete ${section.title || "section"}`}
+              >
+                <Trash className="h-4 w-4" />
+              </Button>
             </div>
-          ))}
-        </div>
+            <div>
+              <Label htmlFor={`section-${sectionIndex}-description`}>
+                Description
+              </Label>
+              <Textarea
+                id={`section-${sectionIndex}-description`}
+                value={section.description}
+                onChange={(e) =>
+                  handleUpdateSection(sectionIndex, {
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Enter section description"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="space-y-4">
+              {section.items.map((item, itemIndex) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-4"
+                >
+                  <div className="flex-1">
+                    <Label htmlFor={`item-${item.id}-label`}>Item Label</Label>
+                    <Input
+                      id={`item-${item.id}-label`}
+                      value={item.label}
+                      onChange={(e) =>
+                        handleUpdateItem(sectionIndex, itemIndex, {
+                          label: e.target.value,
+                        })
+                      }
+                      placeholder="Enter item label"
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteItem(sectionIndex, itemIndex)}
+                    disabled={isLoading}
+                    aria-label={`Delete ${item.label || "item"}`}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleAddItem(sectionIndex)}
+                disabled={isLoading}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Item
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      <div className="flex justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleAddSection}
+          disabled={isLoading}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Section
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? "Saving..." : "Save Checklist"}
+        </Button>
       </div>
-    </StandardFormTemplate>
+    </form>
   )
 } 

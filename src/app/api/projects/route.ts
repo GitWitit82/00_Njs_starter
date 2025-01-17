@@ -1,161 +1,57 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { z } from "zod"
-
-import { authOptions } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { createProjectFromWorkflow } from "@/lib/services/project.service"
+import { RouteHandler } from "@/lib/auth-utils"
+import { Role } from "@prisma/client"
 
-/**
- * Schema for validating project creation request
- */
-const createProjectSchema = z.object({
-  name: z.string().min(1, "Project name is required"),
-  description: z.string().optional(),
-  projectType: z.enum(["VEHICLE_WRAP", "SIGN", "MURAL"]),
-  customerName: z.string().min(1, "Customer name is required"),
-  vinNumber: z.string().optional(),
-  workflowId: z.string().min(1, "Workflow ID is required"),
-  startDate: z.string().transform(str => new Date(str)),
-  endDate: z.string().optional().transform(str => str ? new Date(str) : undefined),
-})
-
-/**
- * POST /api/projects
- * Creates a new project from a workflow template
- */
-export async function POST(req: Request) {
+export const GET = RouteHandler(async () => {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session?.user?.id) {
-      return new NextResponse(
-        JSON.stringify({ error: "You must be logged in to create a project" }), 
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    // Verify user exists and has permission
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id }
-    });
-
-    if (!user) {
-      return new NextResponse(
-        JSON.stringify({ error: "User not found" }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    const json = await req.json()
-    const body = createProjectSchema.parse(json)
-
-    // Additional validation for vehicle wrap projects
-    if (body.projectType === "VEHICLE_WRAP" && !body.vinNumber) {
-      return new NextResponse(
-        JSON.stringify({ 
-          error: "VIN number is required for vehicle wrap projects" 
-        }),
-        { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    const project = await createProjectFromWorkflow({
-      ...body,
-      managerId: session.user.id,
-    })
-
-    return NextResponse.json(project)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(
-        JSON.stringify({ 
-          error: "Validation error", 
-          details: error.errors 
-        }), 
-        { 
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    console.error("[PROJECTS_CREATE]", {
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-      timestamp: new Date().toISOString(),
-    })
-
-    const errorMessage = error instanceof Error ? error.message : "Failed to create project"
-    
-    return new NextResponse(
-      JSON.stringify({ error: errorMessage }), 
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
-  }
-}
-
-/**
- * GET /api/projects
- * Gets all projects or filters by type
- */
-export async function GET(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const { searchParams } = new URL(req.url)
-    const projectType = searchParams.get("type")
-
-    const where = projectType ? {
-      projectType: projectType as "VEHICLE_WRAP" | "SIGN" | "MURAL"
-    } : {}
-
     const projects = await prisma.project.findMany({
-      where,
       include: {
-        phases: {
+        manager: true,
+        tasks: {
           include: {
-            tasks: true
-          }
+            assignee: true,
+          },
         },
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
       },
       orderBy: {
-        createdAt: "desc"
-      }
+        createdAt: "desc",
+      },
     })
-
     return NextResponse.json(projects)
   } catch (error) {
-    console.error("[PROJECTS_LIST]", {
-      error: error instanceof Error ? error.message : "Unknown error occurred",
-      timestamp: new Date().toISOString(),
-    })
-
-    return new NextResponse(
-      JSON.stringify({ error: "Failed to fetch projects" }), 
+    console.error("Failed to fetch projects:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch projects" },
       { status: 500 }
     )
   }
-} 
+}, Role.USER)
+
+export const POST = RouteHandler(async (req: NextRequest) => {
+  try {
+    const data = await req.json()
+    const project = await prisma.project.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        managerId: data.managerId,
+      },
+      include: {
+        manager: true,
+        tasks: {
+          include: {
+            assignee: true,
+          },
+        },
+      },
+    })
+    return NextResponse.json(project)
+  } catch (error) {
+    console.error("Failed to create project:", error)
+    return NextResponse.json(
+      { error: "Failed to create project" },
+      { status: 500 }
+    )
+  }
+}, Role.MANAGER) 

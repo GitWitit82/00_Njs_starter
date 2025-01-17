@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { FormInstanceStatus } from '@prisma/client'
 
 interface BatchStatusUpdateProps {
   nodes: FormDependencyNode[]
@@ -32,23 +33,23 @@ export function BatchStatusUpdate({
 }: BatchStatusUpdateProps) {
   const { toast } = useToast()
   const [selectedForms, setSelectedForms] = useState<string[]>([])
-  const [newStatus, setNewStatus] = useState<string>('')
+  const [newStatus, setNewStatus] = useState<FormInstanceStatus | ''>('')
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
 
   // Handle form selection
-  const handleSelectForm = (formId: string, checked: boolean) => {
+  const handleSelectForm = (formInstanceId: string, checked: boolean) => {
     if (checked) {
-      setSelectedForms(prev => [...prev, formId])
+      setSelectedForms(prev => [...prev, formInstanceId])
     } else {
-      setSelectedForms(prev => prev.filter(id => id !== formId))
+      setSelectedForms(prev => prev.filter(id => id !== formInstanceId))
     }
   }
 
   // Handle select all
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedForms(nodes.map(node => node.formId))
+      setSelectedForms(nodes.map(node => node.formInstanceId))
     } else {
       setSelectedForms([])
     }
@@ -133,20 +134,20 @@ export function BatchStatusUpdate({
           <AnimatePresence>
             {nodes.map((node) => (
               <motion.div
-                key={node.formId}
+                key={node.formInstanceId}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 className="flex items-start gap-2 p-2 border rounded-md"
               >
                 <Checkbox
-                  checked={selectedForms.includes(node.formId)}
-                  onCheckedChange={(checked) => handleSelectForm(node.formId, !!checked)}
-                  id={node.formId}
+                  checked={selectedForms.includes(node.formInstanceId)}
+                  onCheckedChange={(checked) => handleSelectForm(node.formInstanceId, !!checked)}
+                  id={node.formInstanceId}
                 />
                 <div className="flex-1 min-w-0">
                   <label
-                    htmlFor={node.formId}
+                    htmlFor={node.formInstanceId}
                     className="block text-sm font-medium truncate"
                   >
                     {node.formName}
@@ -168,18 +169,18 @@ export function BatchStatusUpdate({
             <label className="text-sm font-medium">New Status</label>
             <Select
               value={newStatus}
-              onValueChange={setNewStatus}
+              onValueChange={(value) => setNewStatus(value as FormInstanceStatus)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select new status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                <SelectItem value="PENDING_REVIEW">Pending Review</SelectItem>
-                <SelectItem value="COMPLETED">Completed</SelectItem>
-                <SelectItem value="ARCHIVED">Archived</SelectItem>
-                <SelectItem value="ON_HOLD">On Hold</SelectItem>
+                <SelectItem value={FormInstanceStatus.ACTIVE}>Active</SelectItem>
+                <SelectItem value={FormInstanceStatus.IN_PROGRESS}>In Progress</SelectItem>
+                <SelectItem value={FormInstanceStatus.PENDING_REVIEW}>Pending Review</SelectItem>
+                <SelectItem value={FormInstanceStatus.COMPLETED}>Completed</SelectItem>
+                <SelectItem value={FormInstanceStatus.ARCHIVED}>Archived</SelectItem>
+                <SelectItem value={FormInstanceStatus.ON_HOLD}>On Hold</SelectItem>
               </SelectContent>
             </Select>
           </div>

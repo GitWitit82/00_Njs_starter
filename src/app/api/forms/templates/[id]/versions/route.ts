@@ -1,141 +1,142 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 
-/**
- * Schema for creating a new form version
- */
 const createVersionSchema = z.object({
-  schema: z.any(),
-  layout: z.any().optional(),
-  style: z.any().optional(),
-  metadata: z.any().optional(),
-  changelog: z.string().min(1, "Changelog is required"),
+  name: z.string().min(1, "Version name is required"),
+  description: z.string().optional(),
+  schema: z.record(z.unknown()).default({}),
+  layout: z.record(z.unknown()).default({}),
+  style: z.record(z.unknown()).default({}),
+  defaultValues: z.record(z.unknown()).default({}),
+  metadata: z.unknown().optional()
 })
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-/**
- * GET /api/forms/templates/[id]/versions
- * Get all versions of a form template
- */
-export async function GET(req: Request, { params }: RouteParams) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
+    const template = await prisma.formTemplate.findUnique({
+      where: { id: params.id },
+      select: { id: true }
+    })
+
+    if (!template) {
+      return NextResponse.json(
+        { error: "Form template not found" },
+        { status: 404 }
+      )
     }
 
-    const id = await Promise.resolve(params.id)
-    if (!id) {
-      return new NextResponse("Template ID is required", { status: 400 })
-    }
-
-    const versions = await prisma.formVersion.findMany({
-      where: {
-        templateId: id,
+    const versions = await prisma.formTemplateVersion.findMany({
+      where: { templateId: params.id },
+      include: {
+        template: {
+          include: {
+            completionRequirements: {
+              include: {
+                dependsOn: true
+              }
+            }
+          }
+        }
       },
       orderBy: {
-        version: "desc",
-      },
-      include: {
-        createdBy: {
-          select: {
-            name: true,
-          },
-        },
-      },
+        createdAt: "desc"
+      }
     })
 
     return NextResponse.json(versions)
   } catch (error) {
-    console.error("[FORM_TEMPLATE_VERSIONS_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("[FORM_VERSIONS_GET]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * POST /api/forms/templates/[id]/versions
- * Create a new version of a form template
- */
-export async function POST(req: Request, { params }: RouteParams) {
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const validatedBody = createVersionSchema.parse(await request.json())
 
-    const id = await Promise.resolve(params.id)
-    if (!id) {
-      return new NextResponse("Template ID is required", { status: 400 })
-    }
-
-    const json = await req.json()
-    const body = createVersionSchema.parse(json)
-
-    // Get the current user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
-
-    if (!user) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-
-    // Get the template and its current version
     const template = await prisma.formTemplate.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
         versions: {
-          orderBy: { version: "desc" },
-          take: 1,
-        },
-      },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 1
+        }
+      }
     })
 
     if (!template) {
-      return new NextResponse("Template not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Form template not found" },
+        { status: 404 }
+      )
     }
+
+    // If this is the first version, set it as current
+    const isCurrent = template.versions.length === 0
 
     // Create new version
-    const newVersion = await prisma.formVersion.create({
+    const version = await prisma.formTemplateVersion.create({
       data: {
-        version: (template.currentVersion || 0) + 1,
-        schema: body.schema,
-        layout: body.layout || {},
-        style: body.style || {},
-        metadata: body.metadata || {},
-        changelog: body.changelog,
-        templateId: template.id,
-        createdById: user.id,
-        isActive: true,
+        name: validatedBody.name,
+        description: validatedBody.description,
+        schema: validatedBody.schema as Prisma.JsonObject,
+        layout: validatedBody.layout as Prisma.JsonObject,
+        style: validatedBody.style as Prisma.JsonObject,
+        defaultValues: validatedBody.defaultValues as Prisma.JsonObject,
+        metadata: validatedBody.metadata as Prisma.JsonObject | null,
+        templateId: params.id,
+        isCurrent
       },
+      include: {
+        template: {
+          include: {
+            completionRequirements: {
+              include: {
+                dependsOn: true
+              }
+            }
+          }
+        }
+      }
     })
 
-    // Update template's current version
-    await prisma.formTemplate.update({
-      where: { id: template.id },
-      data: {
-        currentVersion: newVersion.version,
-        schema: body.schema,
-        layout: body.layout || {},
-        style: body.style || {},
-        metadata: body.metadata || {},
-      },
-    })
-
-    return NextResponse.json(newVersion)
+    return NextResponse.json(version)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
+      return NextResponse.json(
+        { error: "Invalid request data", details: error.errors },
+        { status: 422 }
+      )
     }
-
-    console.error("[FORM_VERSION_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("[FORM_VERSION_CREATE]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

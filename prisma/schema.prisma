@@ -10,6 +10,116 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enums
+enum Role {
+  ADMIN
+  USER
+  MANAGER
+}
+
+enum ProjectType {
+  STANDARD
+  VEHICLE_WRAP
+  CUSTOM
+  SIGN
+  MURAL
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum PhaseStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  BLOCKED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum FormType {
+  STANDARD
+  FORM
+  CHECKLIST
+  SURVEY
+  INSPECTION
+}
+
+enum FormPriority {
+  STANDARD
+  CRITICAL
+  OPTIONAL
+}
+
+enum FormInstanceStatus {
+  DRAFT
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  PENDING_REVIEW
+  ON_HOLD
+}
+
+enum FormStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  IN_REVIEW
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  PENDING_REVIEW
+  ON_HOLD
+}
+
+enum ActivityType {
+  COMMENT
+  STATUS_CHANGE
+  ASSIGNMENT
+  PRIORITY_CHANGE
+  SCHEDULE_CHANGE
+  SCHEDULE_UPDATE
+  ACTUAL_DATES_UPDATE
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+}
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
+// Base Models
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -53,12 +163,12 @@ model User {
   managedProjects Project[]             @relation("ProjectManagers")
   submittedForms  FormResponse[]        @relation("FormSubmissions")
   reviewedForms   FormResponse[]        @relation("FormReviews")
-  createdVersions FormVersion[] // Add relation for form versions
-  responseHistory FormResponseHistory[] // Add relation for response history
+  createdVersions FormVersion[]
+  responseHistory FormResponseHistory[]
   statusChanges   FormStatusHistory[]
-  taskActivity  TaskActivity[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  taskActivity    TaskActivity[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 }
 
 model VerificationToken {
@@ -69,100 +179,111 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// Workflow Template Models
+model UserPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  theme     String   @default("light")
+  language  String   @default("en")
+  timezone  String   @default("UTC")
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?
+  color         String         @default("#000000")
+  users         User[]         @relation("UserDepartments")
+  tasks         WorkflowTask[]
+  projectTasks  ProjectTask[]
+  formTemplates FormTemplate[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// Workflow Models
 model Workflow {
   id            String         @id @default(cuid())
   name          String
   description   String?
-  isTemplate    Boolean        @default(true)  // Indicates if this is a template or instance
+  isTemplate    Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   phases        Phase[]
-  projects      Project[]      // Projects created from this workflow
-  formTemplates FormTemplate[] // Forms associated with this workflow
+  projects      Project[]
+  formTemplates FormTemplate[]
   status        WorkflowStatus @default(ACTIVE)
-  metadata      Json?          // Additional workflow metadata
-  version       Int           @default(1)      // Version tracking
+  metadata      Json?
+  version       Int            @default(1)
 
   @@index([isTemplate])
 }
 
-enum WorkflowStatus {
-  DRAFT
-  ACTIVE
-  ARCHIVED
-  DEPRECATED
-}
-
 model Phase {
-  id            String         @id @default(cuid())
-  name          String
-  description   String?
-  order         Int
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  workflowId    String
-  workflow      Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  tasks         WorkflowTask[]
-  formTemplates FormTemplate[]
-  projectPhases ProjectPhase[] // Instances of this phase in projects
+  id                     String                      @id @default(cuid())
+  name                   String
+  description            String?
+  order                  Int
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  workflowId             String
+  workflow               Workflow                    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  tasks                  WorkflowTask[]
+  formTemplates          FormTemplate[]
+  projectPhases          ProjectPhase[]
   completionRequirements FormCompletionRequirement[]
-  metadata      Json?          // Additional phase metadata
-  estimatedDuration Int?      // Estimated duration in days
-  
+  metadata               Json?
+  estimatedDuration      Int?
+
   @@index([workflowId, order])
 }
 
 model WorkflowTask {
-  id           String        @id @default(cuid())
-  name         String
-  description  String?
-  priority     Priority      @default(MEDIUM)
-  manHours     Float         @default(1)
-  order        Int
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  phaseId      String
-  phase        Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  departmentId String?
-  department   Department?   @relation(fields: [departmentId], references: [id])
-  projectTasks ProjectTask[] @relation("WorkflowTaskToProjectTask")
-  dependencies WorkflowTaskDependency[] @relation("DependentTasks")
-  dependsOn    WorkflowTaskDependency[] @relation("RequiredTasks")
-  formTemplate FormTemplate? @relation(fields: [formTemplateId], references: [id])
+  id             String                   @id @default(cuid())
+  name           String
+  description    String?
+  priority       Priority                 @default(MEDIUM)
+  manHours       Float                    @default(1)
+  order          Int
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  phaseId        String
+  phase          Phase                    @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department?              @relation(fields: [departmentId], references: [id])
+  projectTasks   ProjectTask[]            @relation("WorkflowTaskToProjectTask")
+  dependencies   WorkflowTaskDependency[] @relation("DependentTasks")
+  dependsOn      WorkflowTaskDependency[] @relation("RequiredTasks")
   formTemplateId String?
-  metadata     Json?         // Additional task metadata
-  
+  formTemplate   FormTemplate?            @relation(fields: [formTemplateId], references: [id])
+  metadata       Json?
+
   @@index([phaseId, order])
+  @@index([formTemplateId])
 }
 
-// New model for task dependencies
 model WorkflowTaskDependency {
-  id              String       @id @default(cuid())
-  taskId          String      // The task that depends on another
-  task            WorkflowTask @relation("DependentTasks", fields: [taskId], references: [id])
-  dependsOnId     String      // The task that is required
-  dependsOnTask   WorkflowTask @relation("RequiredTasks", fields: [dependsOnId], references: [id])
-  type            DependencyType @default(FINISH_TO_START)
-  
+  id            String         @id @default(cuid())
+  taskId        String
+  task          WorkflowTask   @relation("DependentTasks", fields: [taskId], references: [id])
+  dependsOnId   String
+  dependsOnTask WorkflowTask   @relation("RequiredTasks", fields: [dependsOnId], references: [id])
+  type          DependencyType @default(FINISH_TO_START)
+
   @@unique([taskId, dependsOnId])
 }
 
-enum DependencyType {
-  FINISH_TO_START    // Task can't start until dependency is finished
-  START_TO_START     // Task can't start until dependency starts
-  FINISH_TO_FINISH   // Task can't finish until dependency finishes
-  START_TO_FINISH    // Task can't finish until dependency starts
-}
-
-// Project Implementation Models
+// Project Models
 model Project {
   id            String         @id @default(cuid())
   name          String
   description   String?
   projectType   ProjectType
   customerName  String
-  vinNumber     String?       // Only for vehicle wraps
+  vinNumber     String?
   status        ProjectStatus  @default(PLANNING)
   startDate     DateTime
   endDate       DateTime?
@@ -173,12 +294,12 @@ model Project {
   managerId     String
   manager       User           @relation("ProjectManagers", fields: [managerId], references: [id])
   phases        ProjectPhase[]
-  formInstances FormInstance[] // Add relation for form instances
+  formInstances FormInstance[]
   tasks         ProjectTask[]
-  progress      Float          @default(0)      // Overall progress (0-100)
-  metadata      Json?          // Additional project metadata
-  version       Int            @default(1)      // Version tracking
-  
+  progress      Float          @default(0)
+  metadata      Json?
+  version       Int            @default(1)
+
   @@index([status])
   @@index([projectType])
 }
@@ -197,357 +318,215 @@ model ProjectPhase {
   project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   phaseId     String
   phase       Phase         @relation(fields: [phaseId], references: [id])
-  tasks       ProjectTask[]
+  tasks       ProjectTask[] @relation("PhaseTasks")
+  phaseTasks  ProjectTask[] @relation("TaskPhase")
 }
 
 model ProjectTask {
-  id              String      @id @default(cuid())
-  name            String
-  description     String?
-  status          TaskStatus  @default(NOT_STARTED)
-  priority        Priority    @default(MEDIUM)
-  manHours        Float       @default(1)
-  scheduledStart  DateTime?
-  scheduledEnd    DateTime?
-  actualStart     DateTime?
-  actualEnd       DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  order           Int         @default(0)
-  progress        Float       @default(0)      // Task progress (0-100)
-  delayReason     String?     // Reason for delay if any
-  dependencies    ProjectTaskDependency[] @relation("DependentProjectTasks")
-  dependsOn       ProjectTaskDependency[] @relation("RequiredProjectTasks")
-
-  // Relations
-  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId       String
-  phase           ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  phaseId         String
-  assignedTo      User?       @relation(fields: [assignedToId], references: [id])
-  assignedToId    String?
-  department      Department? @relation(fields: [departmentId], references: [id])
-  departmentId    String?
-  taskActivities  TaskActivity[]
-  workflowTask    WorkflowTask? @relation("WorkflowTaskToProjectTask", fields: [workflowTaskId], references: [id])
-  workflowTaskId  String?
-  formInstances   FormInstance[]
-  responses       FormResponse[] @relation("TaskResponses")
-  metadata        Json?         // Additional task metadata
+  id             String                  @id @default(cuid())
+  name           String
+  description    String?
+  status         TaskStatus              @default(TODO)
+  priority       Priority                @default(MEDIUM)
+  manHours       Float                   @default(1)
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  order          Int                     @default(0)
+  progress       Float                   @default(0)
+  delayReason    String?
+  dependencies   ProjectTaskDependency[] @relation("DependentProjectTasks")
+  dependsOn      ProjectTaskDependency[] @relation("RequiredProjectTasks")
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId      String
+  phase          ProjectPhase            @relation("PhaseTasks", fields: [phaseId], references: [id], onDelete: Cascade)
+  phaseId        String
+  projectPhaseId String
+  projectPhase   ProjectPhase            @relation("TaskPhase", fields: [projectPhaseId], references: [id])
+  assignedTo     User?                   @relation(fields: [assignedToId], references: [id])
+  assignedToId   String?
+  department     Department?             @relation(fields: [departmentId], references: [id])
+  departmentId   String?
+  taskActivities TaskActivity[]
+  workflowTask   WorkflowTask?           @relation("WorkflowTaskToProjectTask", fields: [workflowTaskId], references: [id])
+  workflowTaskId String?
+  formInstances  FormInstance[]
+  responses      FormResponse[]          @relation("TaskResponses")
+  metadata       Json?
 
   @@index([projectId])
   @@index([phaseId])
+  @@index([projectPhaseId])
   @@index([assignedToId])
   @@index([departmentId])
   @@index([workflowTaskId])
   @@index([status])
 }
 
-// New model for project task dependencies
 model ProjectTaskDependency {
-  id              String       @id @default(cuid())
-  taskId          String      // The task that depends on another
-  task            ProjectTask @relation("DependentProjectTasks", fields: [taskId], references: [id])
-  dependsOnId     String      // The task that is required
-  dependsOnTask   ProjectTask @relation("RequiredProjectTasks", fields: [dependsOnId], references: [id])
-  type            DependencyType @default(FINISH_TO_START)
-  
+  id            String         @id @default(cuid())
+  taskId        String
+  task          ProjectTask    @relation("DependentProjectTasks", fields: [taskId], references: [id])
+  dependsOnId   String
+  dependsOnTask ProjectTask    @relation("RequiredProjectTasks", fields: [dependsOnId], references: [id])
+  type          DependencyType @default(FINISH_TO_START)
+
   @@unique([taskId, dependsOnId])
 }
 
-enum TaskStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETED
-  CANCELLED
-  BLOCKED      // When dependencies are not met
-  OVERDUE      // Past scheduled end date
-}
-
 model TaskActivity {
-  id        String      @id @default(cuid())
-  type      String      // STATUS_CHANGE, PRIORITY_CHANGE, COMMENT, etc.
-  details   String
-  createdAt DateTime    @default(now())
-
-  // Relations
-  task      ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
   taskId    String
-  user      User       @relation(fields: [userId], references: [id])
+  task      ProjectTask  @relation(fields: [taskId], references: [id])
+  type      ActivityType
+  content   String
+  details   String?      // For backward compatibility
+  metadata  Json?
   userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
 
   @@index([taskId])
   @@index([userId])
 }
 
-// Form Management Models
+// Form Models
 model FormTemplate {
-  id             String         @id @default(cuid())
-  name           String
-  description    String?
-  type           FormType       @default(STANDARD)
-  priority       FormPriority   @default(STANDARD)
-  departmentId   String?
-  department     Department?    @relation(fields: [departmentId], references: [id])
-  workflowId     String
-  workflow       Workflow       @relation(fields: [workflowId], references: [id])
-  schema         Json           // Form structure/fields
-  layout         Json?          // Optional layout configuration
-  style          Json?          // Optional styling configuration
-  metadata       Json?          // Additional metadata for custom forms
-  order          Int            @default(0)
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  phaseId        String
-  phase          Phase          @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  responses      FormResponse[] @relation("TemplateResponses")
-  versions       FormVersion[]  @relation("TemplateVersions")
-  currentVersion Int            @default(1)
-  instances      FormInstance[] @relation("TemplateInstances")
-  completionRequirements FormCompletionRequirement[]
-  validationRules Json?         // Custom validation rules
-  defaultValues   Json?         // Default field values
-  
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  type            FormType       @default(STANDARD)
+  priority        FormPriority   @default(STANDARD)
+  order           Int            @default(0)
+  schema          Json?
+  layout          Json?
+  style           Json?
+  metadata        Json?
+  isActive        Boolean        @default(true)
+  currentVersion  Int            @default(1)
+  validationRules Json?
+  defaultValues   Json?
+  departmentId    String?
+  department      Department?    @relation(fields: [departmentId], references: [id])
+  workflowId      String
+  workflow        Workflow       @relation(fields: [workflowId], references: [id])
+  phaseId         String
+  phase           Phase          @relation(fields: [phaseId], references: [id])
+  versions        FormVersion[]
+  instances       FormInstance[]
+  responses       FormResponse[]
+  tasks           WorkflowTask[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([departmentId])
   @@index([workflowId])
   @@index([phaseId])
-  @@index([departmentId])
 }
 
 model FormVersion {
   id          String         @id @default(cuid())
   version     Int
   templateId  String
-  template    FormTemplate   @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
-  schema      Json // Form structure/fields for this version
-  layout      Json? // Layout configuration for this version
-  style       Json? // Styling configuration for this version
-  metadata    Json? // Additional metadata for this version
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
+  template    FormTemplate   @relation(fields: [templateId], references: [id])
+  changelog   String?
+  schema      Json
+  layout      Json?
+  style       Json?
+  metadata    Json?
   createdById String
   createdBy   User           @relation(fields: [createdById], references: [id])
-  changelog   String? // Description of changes in this version
-  instances   FormInstance[] // Add relation for form instances
+  createdAt   DateTime       @default(now())
+  instances   FormInstance[]
 
   @@unique([templateId, version])
 }
 
 model FormInstance {
-  id             String             @id @default(cuid())
-  templateId     String
-  template       FormTemplate       @relation("TemplateInstances", fields: [templateId], references: [id])
-  versionId      String            // Reference to specific version used
-  version        FormVersion       @relation(fields: [versionId], references: [id])
-  projectId      String?
-  project        Project?          @relation(fields: [projectId], references: [id])
-  taskId         String?
-  task           ProjectTask?      @relation(fields: [taskId], references: [id])
-  status         FormInstanceStatus @default(PENDING)
-  data           Json?             // Current form data
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  responses      FormResponse[]    // Historical responses
-  statusHistory  FormStatusHistory[]
-  metadata       Json?             // Additional instance metadata
-  
+  id         String             @id @default(cuid())
+  status     FormInstanceStatus @default(DRAFT)
+  templateId String
+  template   FormTemplate       @relation(fields: [templateId], references: [id])
+  versionId  String
+  version    FormVersion        @relation(fields: [versionId], references: [id])
+  projectId  String?
+  project    Project?           @relation(fields: [projectId], references: [id])
+  taskId     String?
+  task       ProjectTask?       @relation(fields: [taskId], references: [id])
+  data       Json
+  metadata   Json?
+  responses  FormResponse[]
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
   @@index([templateId])
   @@index([projectId])
   @@index([taskId])
-  @@index([status])
 }
 
 model FormResponse {
-  id             String         @id @default(cuid())
-  instanceId     String
-  instance       FormInstance   @relation(fields: [instanceId], references: [id])
-  templateId     String
-  template       FormTemplate   @relation("TemplateResponses", fields: [templateId], references: [id])
-  data           Json          // Response data
-  status         FormStatus    @default(DRAFT)
-  submittedById  String
-  submittedBy    User          @relation("FormSubmissions", fields: [submittedById], references: [id])
-  submittedAt    DateTime      @default(now())
-  reviewedById   String?
-  reviewedBy     User?         @relation("FormReviews", fields: [reviewedById], references: [id])
-  reviewedAt     DateTime?
-  comments       String?
-  version        Int          // Version of form used
-  taskId         String?      // Optional task association
-  task           ProjectTask? @relation("TaskResponses", fields: [taskId], references: [id])
-  history        FormResponseHistory[]
-  metadata       Json?        // Additional response metadata
-  
+  id            String                @id @default(cuid())
+  instanceId    String
+  instance      FormInstance          @relation(fields: [instanceId], references: [id])
+  templateId    String
+  template      FormTemplate          @relation(fields: [templateId], references: [id])
+  data          Json
+  status        FormStatus            @default(DRAFT)
+  submittedById String
+  submittedBy   User                  @relation("FormSubmissions", fields: [submittedById], references: [id])
+  reviewedById  String?
+  reviewedBy    User?                 @relation("FormReviews", fields: [reviewedById], references: [id])
+  taskId        String?
+  task          ProjectTask?          @relation("TaskResponses", fields: [taskId], references: [id])
+  history       FormResponseHistory[]
+  statusHistory FormStatusHistory[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
   @@index([instanceId])
   @@index([templateId])
-  @@index([status])
+  @@index([submittedById])
+  @@index([reviewedById])
+  @@index([taskId])
 }
 
 model FormResponseHistory {
   id          String       @id @default(cuid())
   responseId  String
-  response    FormResponse @relation("ResponseHistory", fields: [responseId], references: [id], onDelete: Cascade)
-  data        Json // Previous response data
-  metadata    Json? // Previous metadata
-  status      FormStatus // Previous status
-  changedAt   DateTime     @default(now())
+  response    FormResponse @relation(fields: [responseId], references: [id])
+  data        Json
   changedById String
   changedBy   User         @relation(fields: [changedById], references: [id])
-  changeType  ChangeType // Type of change made
-  comments    String? // Optional comments about the change
+  createdAt   DateTime     @default(now())
+
+  @@index([responseId])
 }
 
-model Department {
-  id            String         @id @default(cuid())
-  name          String         @unique
-  description   String?
-  color         String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  workflowTasks WorkflowTask[]
-  projectTasks  ProjectTask[]
-  users         User[]         @relation("UserDepartments")
-  formTemplates FormTemplate[]
-}
-
-model UserPreference {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  theme         String   @default("system")
-  notifications Json     @default("{\"email\":true,\"push\":true,\"taskAssigned\":true,\"taskUpdated\":true,\"taskCompleted\":true}")
-  dashboard     Json     @default("{\"defaultView\":\"board\",\"showCompletedTasks\":false,\"taskSortOrder\":\"priority\"}")
-  taskView      Json     @default("{\"defaultPriority\":\"MEDIUM\",\"defaultStatus\":\"NOT_STARTED\",\"showDepartmentColors\":true}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-enum Role {
-  USER
-  MANAGER
-  ADMIN
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-}
-
-enum ProjectStatus {
-  PLANNING
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETED
-  CANCELLED
-}
-
-enum PhaseStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETED
-}
-
-enum TaskStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETED
-}
-
-enum FormType {
-  FORM
-  CHECKLIST
-  SURVEY
-  INSPECTION
-}
-
-enum FormFieldType {
-  TEXT
-  TEXTAREA
-  NUMBER
-  CHECKBOX
-  RADIO
-  SELECT
-  DATE
-  TIME
-  DATETIME
-  CUSTOM
-}
-
-enum FormPriority {
-  CRITICAL // Created immediately with project
-  STANDARD // Created when phase becomes active
-  OPTIONAL // Created on demand
-}
-
-enum FormStatus {
-  DRAFT
-  SUBMITTED
-  IN_REVIEW
-  APPROVED
-  REJECTED
-}
-
-enum FormInstanceStatus {
-  PENDING      // Not started
-  IN_PROGRESS  // Being filled out
-  SUBMITTED    // Submitted for review
-  APPROVED     // Approved by reviewer
-  REJECTED     // Rejected by reviewer
-  ON_HOLD      // Temporarily paused
-  CANCELLED    // Cancelled/no longer needed
-  EXPIRED      // Past due date
-}
-
-enum ChangeType {
-  CREATED
-  UPDATED
-  SUBMITTED
-  REVIEWED
-  APPROVED
-  REJECTED
-}
-
-// New model for form status history
 model FormStatusHistory {
-  id           String            @id @default(cuid())
-  instanceId   String
-  instance     FormInstance      @relation(fields: [instanceId], references: [id])
-  status       FormInstanceStatus
-  changedById  String
-  changedBy    User             @relation(fields: [changedById], references: [id])
-  changedAt    DateTime         @default(now())
-  reason       String?
-  metadata     Json?            // Additional status change metadata
-  
-  @@index([instanceId])
-  @@index([changedById])
+  id          String       @id @default(cuid())
+  responseId  String
+  response    FormResponse @relation(fields: [responseId], references: [id])
+  status      FormStatus
+  changedById String
+  changedBy   User         @relation(fields: [changedById], references: [id])
+  comment     String?
+  createdAt   DateTime     @default(now())
+
+  @@index([responseId])
 }
 
-// New model for form completion requirements
 model FormCompletionRequirement {
-  id                String        @id @default(cuid())
-  templateId        String
-  template          FormTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  phaseId           String
-  phase             Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  isRequired        Boolean       @default(true)
-  requiredForPhase  Boolean       @default(false)
-  requiredForTask   Boolean       @default(true)
-  completionOrder   Int?          // Optional order in which forms should be completed
-  dependsOn         FormCompletionRequirement[] @relation("FormDependencies")
-  dependentForms    FormCompletionRequirement[] @relation("FormDependencies")
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id         String   @id @default(cuid())
+  phaseId    String
+  phase      Phase    @relation(fields: [phaseId], references: [id])
+  formCount  Int      @default(1)
+  isRequired Boolean  @default(true)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  @@unique([templateId, phaseId])
-}
-
-enum ProjectType {
-  VEHICLE_WRAP
-  SIGN
-  MURAL
+  @@index([phaseId])
 }

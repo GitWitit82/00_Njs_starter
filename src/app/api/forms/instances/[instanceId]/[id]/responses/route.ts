@@ -1,137 +1,73 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/prisma"
-import { z } from "zod"
+import { NextResponse } from 'next/server'
+import { db } from '@/lib/db'
 
-/**
- * Schema for creating a form response
- */
-const createResponseSchema = z.object({
-  data: z.any(),
-  metadata: z.any().optional(),
-  version: z.number(),
-})
-
-/**
- * GET /api/forms/instances/[id]/responses
- * Get responses for a form instance
- */
 export async function GET(
-  req: Request,
-  { params }: { params: { instanceId: string } }
+  request: Request,
+  { params }: { params: { instanceId: string; id: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const responses = await prisma.formResponse.findMany({
+    const response = await db.formResponse.findUnique({
       where: {
-        instanceId: params.instanceId,
+        id: params.id,
+        instanceId: params.instanceId
       },
       include: {
-        submittedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        reviewedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        history: {
-          orderBy: {
-            changedAt: "desc",
-          },
+        instance: {
           include: {
-            changedBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+            template: true
+          }
+        }
+      }
     })
 
-    return NextResponse.json(responses)
+    if (!response) {
+      return new NextResponse('Response not found', { status: 404 })
+    }
+
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("[FORM_RESPONSES_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error('Error fetching form response:', error)
+    return new NextResponse('Internal Server Error', { status: 500 })
   }
 }
 
-/**
- * POST /api/forms/instances/[id]/responses
- * Create a new form response
- */
-export async function POST(
-  req: Request,
-  { params }: { params: { instanceId: string } }
+export async function PATCH(
+  request: Request,
+  { params }: { params: { instanceId: string; id: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const { data } = await request.json()
 
-    const json = await req.json()
-    const body = createResponseSchema.parse(json)
-
-    // Get the current user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
-
-    if (!user) {
-      return new NextResponse("User not found", { status: 404 })
-    }
-
-    // Create the response and its initial history entry
-    const response = await prisma.$transaction(async (tx) => {
-      // Create the response
-      const response = await tx.formResponse.create({
-        data: {
-          instanceId: params.instanceId,
-          data: body.data,
-          metadata: body.metadata,
-          version: body.version,
-        },
-      })
-
-      // Create the initial history entry
-      await tx.formResponseHistory.create({
-        data: {
-          responseId: response.id,
-          data: body.data,
-          metadata: body.metadata,
-          status: "DRAFT",
-          changedById: user.id,
-          changeType: "CREATED",
-        },
-      })
-
-      return response
+    const response = await db.formResponse.update({
+      where: {
+        id: params.id,
+        instanceId: params.instanceId
+      },
+      data: { data }
     })
 
     return NextResponse.json(response)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
-    }
+    console.error('Error updating form response:', error)
+    return new NextResponse('Internal Server Error', { status: 500 })
+  }
+}
 
-    console.error("[FORM_RESPONSE_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+export async function DELETE(
+  request: Request,
+  { params }: { params: { instanceId: string; id: string } }
+) {
+  try {
+    await db.formResponse.delete({
+      where: {
+        id: params.id,
+        instanceId: params.instanceId
+      }
+    })
+
+    return new NextResponse(null, { status: 204 })
+  } catch (error) {
+    console.error('Error deleting form response:', error)
+    return new NextResponse('Internal Server Error', { status: 500 })
   }
 } 

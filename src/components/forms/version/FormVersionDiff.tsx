@@ -1,127 +1,113 @@
 "use client"
 
-import * as React from "react"
-import { FormVersion } from "@prisma/client"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { FormVersionService } from "@/lib/services/form-version.service"
+import { FormVersionData } from "@/types/forms"
+import { formatDate } from "@/lib/utils"
 
 interface FormVersionDiffProps {
-  version1: FormVersion
-  version2: FormVersion
-  className?: string
-}
-
-type DiffType = "add" | "remove" | "update" | "type_change" | "array_add" | "array_remove"
-
-interface Difference {
-  path: string
-  type: DiffType
-  value?: any
-  oldValue?: any
-  newValue?: any
+  version: FormVersionData
+  diff: {
+    added: string[]
+    removed: string[]
+    modified: string[]
+  }
 }
 
 /**
- * FormVersionDiff component for displaying differences between two form versions
+ * FormVersionDiff component for displaying differences between versions
+ * @param {FormVersionDiffProps} props - Component props
+ * @returns {JSX.Element} Rendered component
  */
-export function FormVersionDiff({
-  version1,
-  version2,
-  className,
-}: FormVersionDiffProps) {
-  const differences = React.useMemo(
-    () => FormVersionService.compareVersions(version1, version2),
-    [version1, version2]
-  )
-
-  /**
-   * Renders a badge for the difference type
-   */
-  const renderDiffTypeBadge = (type: DiffType) => {
-    const variants: Record<DiffType, { variant: "default" | "destructive" | "outline"; label: string }> = {
-      add: { variant: "default", label: "Added" },
-      remove: { variant: "destructive", label: "Removed" },
-      update: { variant: "outline", label: "Updated" },
-      type_change: { variant: "outline", label: "Type Changed" },
-      array_add: { variant: "default", label: "Array Item Added" },
-      array_remove: { variant: "destructive", label: "Array Item Removed" },
+export function FormVersionDiff({ version, diff }: FormVersionDiffProps) {
+  const getChangeColor = (type: "added" | "removed" | "modified"): string => {
+    switch (type) {
+      case "added":
+        return "text-green-600"
+      case "removed":
+        return "text-red-600"
+      case "modified":
+        return "text-yellow-600"
+      default:
+        return ""
     }
-
-    const { variant, label } = variants[type]
-    return <Badge variant={variant}>{label}</Badge>
   }
 
-  /**
-   * Renders the value of a difference
-   */
-  const renderDiffValue = (diff: Difference) => {
-    if (diff.type === "update" || diff.type === "type_change") {
-      return (
-        <div className="space-y-1">
-          <div className="text-sm text-destructive line-through">
-            {JSON.stringify(diff.oldValue)}
-          </div>
-          <div className="text-sm text-green-600">
-            {JSON.stringify(diff.newValue)}
-          </div>
-        </div>
-      )
+  const getChangeSymbol = (type: "added" | "removed" | "modified"): string => {
+    switch (type) {
+      case "added":
+        return "+"
+      case "removed":
+        return "-"
+      case "modified":
+        return "~"
+      default:
+        return ""
     }
-
-    return (
-      <div className="text-sm">
-        {JSON.stringify(diff.value)}
-      </div>
-    )
   }
 
-  /**
-   * Renders a section of differences
-   */
-  const renderDiffSection = (title: string, diffs: Difference[]) => {
-    if (diffs.length === 0) return null
-
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">{title}</h3>
-        {diffs.map((diff, index) => (
-          <Card key={index} className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{diff.path}</span>
-              {renderDiffTypeBadge(diff.type)}
-            </div>
-            {renderDiffValue(diff)}
-          </Card>
-        ))}
-      </div>
-    )
+  const getChangeDescription = (type: "added" | "removed" | "modified"): string => {
+    switch (type) {
+      case "added":
+        return "Added"
+      case "removed":
+        return "Removed"
+      case "modified":
+        return "Modified"
+      default:
+        return ""
+    }
   }
 
   return (
-    <ScrollArea className={className}>
-      <div className="space-y-6 p-4">
+    <Card className="p-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Version Comparison</h2>
-            <p className="text-sm text-muted-foreground">
-              Comparing v{version1.version} with v{version2.version}
-            </p>
-          </div>
+          <h3 className="font-medium">
+            Changes in Version {version.versionNumber}
+          </h3>
+          <span className="text-sm text-muted-foreground">
+            {formatDate(version.createdAt)}
+          </span>
         </div>
 
-        {renderDiffSection("Schema Changes", differences.schema)}
-        {renderDiffSection("Layout Changes", differences.layout)}
-        {renderDiffSection("Style Changes", differences.style)}
-        {renderDiffSection("Metadata Changes", differences.metadata)}
+        <div className="space-y-4" role="region" aria-label="Version changes summary">
+          {version.notes && (
+            <p className="text-sm text-muted-foreground">{version.notes}</p>
+          )}
 
-        {Object.values(differences).every((d) => d.length === 0) && (
-          <p className="text-center text-muted-foreground">
-            No differences found between these versions
-          </p>
-        )}
+          <div className="space-y-2">
+            {["added", "removed", "modified"].map((type) => {
+              const changes = diff[type as keyof typeof diff]
+              if (!changes?.length) return null
+
+              return (
+                <div
+                  key={type}
+                  className="space-y-1"
+                  role="list"
+                  aria-label={`${getChangeDescription(type as "added" | "removed" | "modified")} changes`}
+                >
+                  <h4 className={`text-sm font-medium ${getChangeColor(type as "added" | "removed" | "modified")}`}>
+                    {getChangeDescription(type as "added" | "removed" | "modified")}
+                  </h4>
+                  {changes.map((change, index) => (
+                    <div
+                      key={index}
+                      className="text-sm"
+                      role="listitem"
+                    >
+                      <span className="mr-2 font-mono">
+                        {getChangeSymbol(type as "added" | "removed" | "modified")}
+                      </span>
+                      {change}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
-    </ScrollArea>
+    </Card>
   )
 } 

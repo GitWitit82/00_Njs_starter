@@ -1,8 +1,12 @@
-import { Suspense } from "react"
-import { db } from "@/lib/db"
-import { FormBuilderWrapper } from "@/components/forms/builder/form-builder-wrapper"
-import { Department, FormTemplate, Workflow, User } from "@prisma/client"
+import { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { prisma } from "@/lib/prisma"
+import { FormBuilder } from "@/components/forms/builder/FormBuilder"
+
+export const metadata: Metadata = {
+  title: "Edit Form Template",
+  description: "Edit a form template",
+}
 
 interface PageProps {
   params: {
@@ -10,27 +14,14 @@ interface PageProps {
   }
 }
 
-interface FormTemplateWithRelations extends FormTemplate {
-  department: Department | null
-  workflow: Workflow | null
-  user: User
-}
-
-/**
- * Form template edit page - Server Component
- */
-export default async function FormTemplatePage({
-  params,
-}: PageProps) {
-  const { id } = params
-
-  // Fetch template with relations
-  const template = await db.formTemplate.findUnique({
-    where: { id },
+export default async function EditFormTemplatePage({ params }: PageProps) {
+  const template = await prisma.formTemplate.findUnique({
+    where: { id: params.id },
     include: {
-      department: true,
-      workflow: true,
-      user: true,
+      versions: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   })
 
@@ -38,30 +29,12 @@ export default async function FormTemplatePage({
     notFound()
   }
 
-  // Fetch departments for dropdown
-  const departments = await db.department.findMany({
-    orderBy: { name: "asc" },
-  })
-
-  // Fetch workflows with phases for dropdown
-  const workflows = await db.workflow.findMany({
-    include: {
-      phases: {
-        orderBy: { order: "asc" },
-      },
-    },
-    orderBy: { name: "asc" },
-  })
-
   return (
-    <div className="container py-6">
-      <Suspense fallback={<div>Loading preview...</div>}>
-        <FormBuilderWrapper
-          template={template}
-          departments={departments}
-          workflows={workflows}
-        />
-      </Suspense>
+    <div className="container mx-auto py-10">
+      <FormBuilder
+        templateId={template.id}
+        initialData={template.versions[0]?.schema || null}
+      />
     </div>
   )
 } 

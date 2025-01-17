@@ -2,13 +2,23 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { FormStatus, Prisma } from "@prisma/client"
 import { z } from "zod"
 
-const formResponseSchema = z.object({
+const createResponseSchema = z.object({
+  instanceId: z.string(),
   templateId: z.string(),
   data: z.record(z.any()),
-  status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"]).default("DRAFT"),
-  projectTaskId: z.string().optional(),
+  status: z.nativeEnum(FormStatus),
+  taskId: z.string().optional(),
+  metadata: z.record(z.any()).optional(),
+})
+
+const querySchema = z.object({
+  status: z.nativeEnum(FormStatus).optional(),
+  taskId: z.string().optional(),
+  templateId: z.string().optional(),
+  instanceId: z.string().optional(),
 })
 
 /**
@@ -16,70 +26,123 @@ const formResponseSchema = z.object({
  * Retrieves form responses with optional filtering
  */
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return new NextResponse("Unauthorized", { status: 401 })
-  }
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse(
+        JSON.stringify({ error: "Unauthorized" }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
-  const { searchParams } = new URL(request.url)
-  const templateId = searchParams.get("templateId")
-  const projectTaskId = searchParams.get("projectTaskId")
-  const status = searchParams.get("status")
-  const page = parseInt(searchParams.get("page") || "1")
-  const limit = parseInt(searchParams.get("limit") || "10")
+    const { searchParams } = new URL(request.url)
+    const queryResult = querySchema.safeParse({
+      status: searchParams.get("status"),
+      taskId: searchParams.get("taskId"),
+      templateId: searchParams.get("templateId"),
+      instanceId: searchParams.get("instanceId"),
+    })
 
-  const where = {
-    ...(templateId && { templateId }),
-    ...(projectTaskId && { projectTaskId }),
-    ...(status && { status }),
-  }
+    if (!queryResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: "Invalid query parameters", details: queryResult.error.errors }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
-  const [responses, total] = await Promise.all([
-    prisma.formResponse.findMany({
-      where,
-      include: {
-        template: {
-          select: {
-            name: true,
-            type: true,
+    const where: Prisma.FormResponseWhereInput = {}
+
+    // Only add defined parameters to where clause
+    Object.entries(queryResult.data).forEach(([key, value]) => {
+      if (value !== undefined) {
+        where[key as keyof Prisma.FormResponseWhereInput] = value
+      }
+    })
+
+    const [responses, total] = await prisma.$transaction([
+      prisma.formResponse.findMany({
+        where,
+        include: {
+          instance: true,
+          template: {
+            select: {
+              name: true,
+              type: true,
+              priority: true,
+              department: true,
+            },
           },
-        },
-        submittedBy: {
-          select: {
-            name: true,
-            email: true,
-            image: true,
+          task: {
+            include: {
+              department: true,
+            },
           },
-        },
-        projectTask: {
-          select: {
-            name: true,
-            project: {
-              select: {
-                name: true,
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          history: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            include: {
+              changedBy: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          statusHistory: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            include: {
+              changedBy: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.formResponse.count({ where }),
-  ])
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+      prisma.formResponse.count({ where })
+    ])
 
-  return NextResponse.json({
-    responses,
-    pagination: {
+    return NextResponse.json({
+      data: responses,
       total,
-      pages: Math.ceil(total / limit),
-      page,
-      limit,
-    },
-  })
+    })
+  } catch (error) {
+    console.error("[FORM_RESPONSES_GET]", error)
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Error" }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
 }
 
 /**
@@ -87,32 +150,60 @@ export async function GET(request: Request) {
  * Creates a new form response
  */
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return new NextResponse("Unauthorized", { status: 401 })
-  }
-
   try {
-    const json = await request.json()
-    const body = formResponseSchema.parse(json)
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
+    }
 
+    const json = await request.json()
+    const body = createResponseSchema.parse(json)
+
+    // Verify that the instance exists
+    const instance = await prisma.formInstance.findUnique({
+      where: { id: body.instanceId },
+      include: {
+        template: true,
+      },
+    })
+
+    if (!instance) {
+      return new NextResponse(
+        JSON.stringify({ error: "Form instance not found" }),
+        { status: 404 }
+      )
+    }
+
+    // Create the response
     const response = await prisma.formResponse.create({
       data: {
-        ...body,
+        instanceId: body.instanceId,
+        templateId: body.templateId,
+        data: body.data,
+        status: body.status,
+        taskId: body.taskId,
+        metadata: body.metadata,
         submittedById: session.user.id,
       },
       include: {
+        instance: true,
         template: {
           select: {
             name: true,
             type: true,
+            priority: true,
+            department: true,
+          },
+        },
+        task: {
+          include: {
+            department: true,
           },
         },
         submittedBy: {
           select: {
+            id: true,
             name: true,
-            email: true,
-            image: true,
           },
         },
       },
@@ -121,9 +212,22 @@ export async function POST(request: Request) {
     return NextResponse.json(response)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 422 })
+      return new NextResponse(
+        JSON.stringify({ error: "Invalid request data", details: error.errors }),
+        { 
+          status: 422,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
     }
 
-    return new NextResponse(null, { status: 500 })
+    console.error("[FORM_RESPONSES_POST]", error)
+    return new NextResponse(
+      JSON.stringify({ error: "Internal Error" }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
 } 

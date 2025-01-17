@@ -5,83 +5,146 @@
  * @description Component for displaying task details, actions, and comments
  */
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TaskActions } from "./TaskActions";
-import { TaskComments } from "./TaskComments";
-
-interface User {
-  id: string;
-  name: string | null;
-}
-
-interface TaskActivity {
-  id: string;
-  type: string;
-  content: string;
-  createdAt: string;
-  user: User;
-}
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { toast } from "sonner"
 
 interface TaskDetailsProps {
-  taskId: string;
-  projectId: string;
-  name: string;
-  description: string | null;
-  status: string;
-  currentAssignee: User | null;
-  users: User[];
-  activity: TaskActivity[];
+  task: Task
+  onUpdate: (data: TaskUpdateData) => Promise<void>
+  isLoading?: boolean
+}
+
+interface Task {
+  id: string
+  name: string
+  description: string
+  status: string
+  priority: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface TaskUpdateData {
+  name: string
+  description: string
+  status: string
+  priority: string
 }
 
 /**
- * Task details component
+ * TaskDetails component for displaying and editing task details
+ * @param {TaskDetailsProps} props - Component props
+ * @returns {JSX.Element} Rendered component
  */
 export function TaskDetails({
-  taskId,
-  projectId,
-  name,
-  description,
-  status,
-  currentAssignee,
-  users,
-  activity,
+  task,
+  onUpdate,
+  isLoading = false,
 }: TaskDetailsProps) {
+  const [formData, setFormData] = useState<TaskUpdateData>({
+    name: task.name,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await onUpdate(formData)
+      toast.success("Task updated successfully")
+    } catch {
+      toast.error("Failed to update task")
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{name}</CardTitle>
-        <TaskActions
-          taskId={taskId}
-          projectId={projectId}
-          currentStatus={status}
-          currentAssignee={currentAssignee}
-          users={users}
-        />
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="details" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-          </TabsList>
-          <TabsContent value="details" className="space-y-4">
-            <div>
-              <h3 className="font-medium mb-2">Description</h3>
-              <p className="text-sm text-muted-foreground">
-                {description || "No description provided."}
-              </p>
-            </div>
-          </TabsContent>
-          <TabsContent value="activity">
-            <TaskComments
-              taskId={taskId}
-              projectId={projectId}
-              activity={activity}
-            />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
+    <Card className="p-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="task-name">Task Name</Label>
+          <Input
+            id="task-name"
+            value={formData.name}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
+            placeholder="Enter task name"
+            disabled={isLoading}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="task-description">Description</Label>
+          <Textarea
+            id="task-description"
+            value={formData.description}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                description: e.target.value,
+              }))
+            }
+            placeholder="Enter task description"
+            disabled={isLoading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="task-status">Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) =>
+              setFormData((prev) => ({ ...prev, status: value }))
+            }
+            disabled={isLoading}
+          >
+            <SelectTrigger id="task-status">
+              <SelectValue placeholder="Select task status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todo">To Do</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="done">Done</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="task-priority">Priority</Label>
+          <Select
+            value={formData.priority}
+            onValueChange={(value) =>
+              setFormData((prev) => ({ ...prev, priority: value }))
+            }
+            disabled={isLoading}
+          >
+            <SelectTrigger id="task-priority">
+              <SelectValue placeholder="Select task priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </form>
     </Card>
-  );
+  )
 } 

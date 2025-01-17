@@ -3,31 +3,29 @@
  * @description Displays and manages phases for a specific workflow
  */
 
-import { Suspense } from "react"
+import { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { Phase } from "@prisma/client"
-
-import { PhasesTable } from "@/components/workflows/phases-table"
 import { prisma } from "@/lib/prisma"
+import { PhasesTable } from "@/components/workflows/phases-table"
 
-interface WorkflowPhasesPageProps {
-  params: Promise<{
-    workflowId: string
-  }>
+export const metadata: Metadata = {
+  title: "Workflow Phases",
+  description: "Manage workflow phases",
 }
 
-async function getWorkflowWithPhases(workflowId: string) {
+interface PageProps {
+  params: {
+    workflowId: string
+  }
+}
+
+export default async function WorkflowPhasesPage({ params }: PageProps) {
   const workflow = await prisma.workflow.findUnique({
-    where: { id: workflowId },
+    where: { id: params.workflowId },
     include: {
       phases: {
-        orderBy: { order: "asc" },
-        include: {
-          _count: {
-            select: {
-              tasks: true,
-            },
-          },
+        orderBy: {
+          order: "asc",
         },
       },
     },
@@ -37,33 +35,15 @@ async function getWorkflowWithPhases(workflowId: string) {
     notFound()
   }
 
-  return workflow
-}
-
-export default async function WorkflowPhasesPage({
-  params,
-}: WorkflowPhasesPageProps) {
-  // Await the params object
-  const resolvedParams = await params
-  const workflow = await getWorkflowWithPhases(resolvedParams.workflowId)
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {workflow.name} - Phases
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Manage phases and their associated tasks for this workflow.
-        </p>
-      </div>
-
-      <Suspense fallback={<div>Loading phases...</div>}>
-        <PhasesTable
-          workflowId={workflow.id}
-          phases={workflow.phases}
-        />
-      </Suspense>
+    <div className="container mx-auto py-10">
+      <h1 className="mb-8 text-3xl font-bold">
+        {workflow.name} - Phases
+      </h1>
+      <PhasesTable
+        workflowId={workflow.id}
+        phases={workflow.phases}
+      />
     </div>
   )
 } 

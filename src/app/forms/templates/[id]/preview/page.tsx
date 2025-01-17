@@ -1,35 +1,27 @@
-import { Suspense } from "react"
-import { db } from "@/lib/db"
-import { FormPreview } from "@/components/forms/preview/FormPreview"
-import { Department, FormTemplate, Workflow } from "@prisma/client"
+import { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { prisma } from "@/lib/prisma"
+import { FormPreview } from "@/components/forms/preview/FormPreview"
+
+export const metadata: Metadata = {
+  title: "Preview Form Template",
+  description: "Preview a form template",
+}
 
 interface PageProps {
-  params: Promise<{
+  params: {
     id: string
-  }>
+  }
 }
 
-interface FormTemplateWithRelations extends FormTemplate {
-  department: Department | null
-  workflow: Workflow | null
-}
-
-/**
- * Form template preview page - Server Component
- */
-export default async function FormPreviewPage({
-  params,
-}: PageProps) {
-  // Await the params
-  const { id } = await params
-
-  // Fetch template with relations
-  const template = await db.formTemplate.findUnique({
-    where: { id },
+export default async function PreviewFormTemplatePage({ params }: PageProps) {
+  const template = await prisma.formTemplate.findUnique({
+    where: { id: params.id },
     include: {
-      department: true,
-      workflow: true,
+      versions: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   })
 
@@ -37,22 +29,9 @@ export default async function FormPreviewPage({
     notFound()
   }
 
-  // Fetch departments for the preview
-  const departments = await db.department.findMany({
-    orderBy: { name: "asc" },
-  })
-
   return (
-    <div className="container py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{template.name}</h1>
-        {template.description && (
-          <p className="text-muted-foreground mt-1">{template.description}</p>
-        )}
-      </div>
-      <Suspense fallback={<div>Loading preview...</div>}>
-        <FormPreview template={template} departments={departments} />
-      </Suspense>
+    <div className="container mx-auto py-10">
+      <FormPreview schema={template.versions[0]?.schema || null} />
     </div>
   )
 } 

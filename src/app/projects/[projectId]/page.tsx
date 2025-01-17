@@ -3,218 +3,85 @@
  * @description Project details page component
  */
 
-import { Suspense } from "react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
-import { getServerSession } from "next-auth";
+import { Metadata } from "next"
+import { notFound } from "next/navigation"
+import { prisma } from "@/lib/prisma"
+import { ProjectDetails } from "@/components/projects/ProjectDetails"
+import { TasksDataTable } from "@/components/tasks/TasksDataTable"
 
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { TasksTable } from "@/components/projects/TasksTable";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-interface ProjectPageProps {
-  params: {
-    projectId: string;
-  };
+export const metadata: Metadata = {
+  title: "Project Details",
+  description: "View and manage project details",
 }
 
-/**
- * Gets the appropriate badge variant based on project status
- */
-function getStatusVariant(status: string) {
-  switch (status) {
-    case "PLANNING":
-      return "secondary";
-    case "IN_PROGRESS":
-      return "default";
-    case "ON_HOLD":
-      return "warning";
-    case "COMPLETED":
-      return "success";
-    case "CANCELLED":
-      return "destructive";
-    default:
-      return "secondary";
+interface PageProps {
+  params: {
+    projectId: string
   }
 }
 
-/**
- * Calculates project progress based on completed tasks
- */
-function calculateProgress(phases: any[]) {
-  let totalTasks = 0;
-  let completedTasks = 0;
-
-  phases.forEach((phase) => {
-    phase.tasks.forEach((task: any) => {
-      totalTasks++;
-      if (task.status === "COMPLETED") {
-        completedTasks++;
-      }
-    });
-  });
-
-  return totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+interface Project {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  createdAt: Date
+  updatedAt: Date
+  tasks: Task[]
 }
 
-/**
- * Fetches project data with all related information
- */
-async function getProject(id: string) {
+interface Task {
+  id: string
+  name: string
+  description: string
+  status: string
+  priority: string
+  createdAt: string
+  updatedAt: string
+}
+
+export default async function ProjectPage({ params }: PageProps) {
   const project = await prisma.project.findUnique({
-    where: { id },
+    where: { id: params.projectId },
     include: {
-      workflow: {
-        select: {
-          name: true,
-        },
-      },
-      manager: {
-        select: {
-          name: true,
-        },
-      },
-      phases: {
-        include: {
-          phase: true,
-          tasks: {
-            include: {
-              assignedTo: true,
-              department: true,
-            },
-          },
-        },
-        orderBy: {
-          order: "asc",
-        },
+      tasks: {
+        orderBy: { createdAt: "desc" },
       },
     },
-  });
+  })
 
   if (!project) {
-    notFound();
+    notFound()
   }
 
-  return project;
-}
-
-/**
- * Project details page component
- */
-export default async function ProjectPage({ params }: ProjectPageProps) {
-  const { projectId } = params;
-
-  if (!projectId) {
-    notFound();
+  const handleProjectUpdate = async (data: Partial<Project>) => {
+    "use server"
+    await prisma.project.update({
+      where: { id: params.projectId },
+      data,
+    })
   }
 
-  const project = await getProject(projectId);
-  const progress = calculateProgress(project.phases);
+  const handleTaskUpdate = async (taskId: string, data: Partial<Task>) => {
+    "use server"
+    await prisma.task.update({
+      where: { id: taskId },
+      data,
+    })
+  }
 
   return (
     <div className="container mx-auto py-10">
-      <div className="mb-8">
-        <Link href="/projects">
-          <Button variant="ghost" className="mb-4">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Projects
-          </Button>
-        </Link>
-
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-            <p className="text-sm text-muted-foreground">{project.description}</p>
-            <div className="text-sm text-muted-foreground mt-1">{project.workflow.name}</div>
-          </div>
-
-          <div className="text-sm text-right">
-            <div className="mb-2">
-              <span className="text-muted-foreground">Customer: </span>
-              {project.customerName}
-            </div>
-            {project.vinNumber && (
-              <div className="mb-2">
-                <span className="text-muted-foreground">VIN: </span>
-                {project.vinNumber}
-              </div>
-            )}
-            <div className="mb-2">
-              <span className="text-muted-foreground">Manager: </span>
-              {project.manager.name}
-            </div>
-            <div>
-              <Badge variant={getStatusVariant(project.status)}>
-                {project.status}
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Project Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Overall Progress</span>
-                  <span>{progress}%</span>
-                </div>
-                <Progress value={progress} />
-              </div>
-
-              <div className="grid grid-cols-4 gap-4 mt-4">
-                {project.phases.map((phase: any) => (
-                  <div key={phase.id} className="space-y-1">
-                    <div className="font-medium">{phase.phase.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {phase.status}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue={project.phases[0]?.id}>
-              <TabsList className="mb-4">
-                {project.phases.map((phase: any) => (
-                  <TabsTrigger key={phase.id} value={phase.id}>
-                    {phase.phase.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {project.phases.map((phase: any) => (
-                <TabsContent key={phase.id} value={phase.id}>
-                  <Suspense fallback={<div>Loading tasks...</div>}>
-                    <TasksTable
-                      projectId={project.id}
-                      tasks={phase.tasks}
-                    />
-                  </Suspense>
-                </TabsContent>
-              ))}
-            </Tabs>
-          </CardContent>
-        </Card>
+        <ProjectDetails
+          project={project}
+          onUpdate={handleProjectUpdate}
+        />
+        <TasksDataTable
+          tasks={project.tasks}
+          onTaskUpdate={handleTaskUpdate}
+        />
       </div>
     </div>
-  );
+  )
 } 

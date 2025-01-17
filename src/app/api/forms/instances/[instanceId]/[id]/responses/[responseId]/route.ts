@@ -1,138 +1,191 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { Prisma, FormResponseStatus } from "@prisma/client"
 
-/**
- * Schema for updating a form response
- */
+const responseStatusEnum = z.nativeEnum(FormResponseStatus)
+
 const updateResponseSchema = z.object({
-  data: z.any().optional(),
-  metadata: z.any().optional(),
-  status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"]).optional(),
+  data: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  status: responseStatusEnum.optional(),
   comments: z.string().optional(),
 })
 
-/**
- * GET /api/forms/instances/[id]/responses/[responseId]
- * Get a specific form response
- */
 export async function GET(
   req: Request,
   { params }: { params: { instanceId: string; responseId: string } }
 ) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const response = await prisma.formResponse.findFirst({
-      where: {
-        id: params.responseId,
-        instanceId: params.instanceId,
-      },
-      include: {
-        submittedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+  try {
+    const [formInstance, response] = await Promise.all([
+      prisma.formInstance.findUnique({
+        where: { id: params.instanceId },
+        select: { id: true },
+      }),
+      prisma.formResponse.findFirst({
+        where: {
+          id: params.responseId,
+          instanceId: params.instanceId,
         },
-        reviewedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+        include: {
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-        },
-        history: {
-          orderBy: {
-            changedAt: "desc",
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-          include: {
-            changedBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+          history: {
+            orderBy: {
+              changedAt: "desc",
+            },
+            take: 5,
+            include: {
+              changedBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
-    })
+      }),
+    ])
+
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
+    }
 
     if (!response) {
-      return new NextResponse("Response not found", { status: 404 })
+      return NextResponse.json({ error: "Response not found" }, { status: 404 })
     }
 
     return NextResponse.json(response)
   } catch (error) {
     console.error("[FORM_RESPONSE_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * PATCH /api/forms/instances/[id]/responses/[responseId]
- * Update a form response
- */
 export async function PATCH(
   req: Request,
   { params }: { params: { instanceId: string; responseId: string } }
 ) {
-  try {
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
+  try {
     const json = await req.json()
     const body = updateResponseSchema.parse(json)
 
-    // Get the current user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    })
+    const [user, formInstance, existingResponse] = await Promise.all([
+      prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      }),
+      prisma.formInstance.findUnique({
+        where: { id: params.instanceId },
+        select: { id: true },
+      }),
+      prisma.formResponse.findFirst({
+        where: {
+          id: params.responseId,
+          instanceId: params.instanceId,
+        },
+        select: { status: true },
+      }),
+    ])
 
     if (!user) {
-      return new NextResponse("User not found", { status: 404 })
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Update the response and create a history entry
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
+    }
+
+    if (!existingResponse) {
+      return NextResponse.json({ error: "Response not found" }, { status: 404 })
+    }
+
+    if (body.status && existingResponse.status !== FormResponseStatus.DRAFT && !["APPROVED", "REJECTED"].includes(body.status)) {
+      return NextResponse.json(
+        { error: "Cannot update status of non-draft response" },
+        { status: 400 }
+      )
+    }
+
     const response = await prisma.$transaction(async (tx) => {
-      // Update the response
       const response = await tx.formResponse.update({
         where: {
           id: params.responseId,
         },
         data: {
-          ...(body.data && { data: body.data }),
-          ...(body.metadata && { metadata: body.metadata }),
+          ...(body.data && { data: body.data as Prisma.JsonObject }),
+          ...(body.metadata && { metadata: body.metadata as Prisma.JsonObject }),
           ...(body.status && { status: body.status }),
           ...(body.comments && { comments: body.comments }),
-          ...(body.status === "SUBMITTED" && {
+          ...(body.status === FormResponseStatus.SUBMITTED && {
             submittedAt: new Date(),
             submittedById: user.id,
           }),
-          ...(["APPROVED", "REJECTED"].includes(body.status || "") && {
+          ...([FormResponseStatus.APPROVED, FormResponseStatus.REJECTED].includes(body.status as FormResponseStatus) && {
             reviewedAt: new Date(),
             reviewedById: user.id,
           }),
         },
+        include: {
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
       })
 
-      // Create history entry
       await tx.formResponseHistory.create({
         data: {
           responseId: response.id,
-          data: response.data,
-          metadata: response.metadata,
+          data: response.data as Prisma.JsonObject,
+          metadata: response.metadata as Prisma.JsonObject,
           status: response.status,
           changedById: user.id,
-          changeType: body.status ? body.status : "UPDATED",
+          changeType: body.status || "UPDATED",
           comments: body.comments,
         },
       })
@@ -143,42 +196,58 @@ export async function PATCH(
     return NextResponse.json(response)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
+      return NextResponse.json(
+        { error: "Invalid request data", details: error.errors },
+        { status: 422 }
+      )
     }
 
     console.error("[FORM_RESPONSE_PATCH]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * DELETE /api/forms/instances/[id]/responses/[responseId]
- * Delete a form response (only if in DRAFT status)
- */
 export async function DELETE(
   req: Request,
   { params }: { params: { instanceId: string; responseId: string } }
 ) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const response = await prisma.formResponse.findFirst({
-      where: {
-        id: params.responseId,
-        instanceId: params.instanceId,
-      },
-    })
+  try {
+    const [formInstance, response] = await Promise.all([
+      prisma.formInstance.findUnique({
+        where: { id: params.instanceId },
+        select: { id: true },
+      }),
+      prisma.formResponse.findFirst({
+        where: {
+          id: params.responseId,
+          instanceId: params.instanceId,
+        },
+        select: { status: true },
+      }),
+    ])
+
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
+    }
 
     if (!response) {
-      return new NextResponse("Response not found", { status: 404 })
+      return NextResponse.json({ error: "Response not found" }, { status: 404 })
     }
 
-    if (response.status !== "DRAFT") {
-      return new NextResponse(
-        "Only draft responses can be deleted",
+    if (response.status !== FormResponseStatus.DRAFT) {
+      return NextResponse.json(
+        { error: "Only draft responses can be deleted" },
         { status: 400 }
       )
     }
@@ -189,9 +258,12 @@ export async function DELETE(
       },
     })
 
-    return new NextResponse(null, { status: 204 })
+    return NextResponse.json(null, { status: 204 })
   } catch (error) {
     console.error("[FORM_RESPONSE_DELETE]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

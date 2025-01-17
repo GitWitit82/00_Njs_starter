@@ -1,97 +1,29 @@
 import { NextResponse } from "next/server"
-import { z } from "zod"
-import bcrypt from "bcryptjs"
+import { prisma } from "@/lib/prisma"
+import { RouteHandler } from "@/lib/auth-utils"
+import { Role } from "@prisma/client"
 
-import { db } from "@/lib/db"
-import { getCurrentUser } from "@/lib/auth-utils"
-
-const userSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  password: z.string().min(4, "Password must be at least 4 characters"),
-  role: z.enum(["ADMIN", "MANAGER", "USER"]),
-})
-
-export async function GET() {
+export const GET = RouteHandler(async () => {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
-      return new NextResponse("Unauthorized", { status: 403 })
-    }
-
-    const users = await db.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        role: true,
-        createdAt: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" }
     })
-
     return NextResponse.json(users)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[USERS_GET]", error.message)
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error(error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
-}
+}, Role.ADMIN)
 
-export async function POST(req: Request) {
+export const POST = RouteHandler(async (req) => {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || user.role !== "ADMIN") {
-      return new NextResponse("Unauthorized", { status: 403 })
-    }
-
-    const body = await req.json()
-    const validatedFields = userSchema.safeParse(body)
-
-    if (!validatedFields.success) {
-      return NextResponse.json(
-        { error: "Invalid fields", issues: validatedFields.error.issues },
-        { status: 400 }
-      )
-    }
-
-    const { name, password, role } = validatedFields.data
-
-    const existingUser = await db.user.findUnique({
-      where: { name },
+    const { name, email, role } = await req.json()
+    const user = await prisma.user.create({
+      data: { name, email, role }
     })
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Username already exists" },
-        { status: 400 }
-      )
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    const newUser = await db.user.create({
-      data: {
-        name,
-        password: hashedPassword,
-        role,
-      },
-      select: {
-        id: true,
-        name: true,
-        role: true,
-        createdAt: true,
-      },
-    })
-
-    return NextResponse.json(newUser)
+    return NextResponse.json(user)
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[USERS_POST]", error.message)
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error(error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
-} 
+}, Role.ADMIN) 

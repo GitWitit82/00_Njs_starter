@@ -17,38 +17,35 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from "sonner"
 
 interface WorkflowsTableProps {
   initialData: Workflow[];
+  onDelete: (id: string) => Promise<void>;
 }
 
 /**
  * WorkflowsTable component
  */
-export function WorkflowsTable({ initialData }: WorkflowsTableProps) {
-  const [workflows, setWorkflows] = useState<Workflow[]>(initialData);
+export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (workflowId: string) => {
     try {
-      const response = await fetch(`/api/workflows/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete workflow');
-      }
-
-      const { data } = await response.json();
-      setWorkflows(workflows.filter((workflow) => workflow.id !== id));
-    } catch (error) {
-      console.error('Error deleting workflow:', error);
+      setIsLoading(true);
+      await onDelete(workflowId);
+      toast.success("Workflow deleted successfully");
+    } catch {
+      toast.error("Failed to delete workflow");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -66,7 +63,7 @@ export function WorkflowsTable({ initialData }: WorkflowsTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {workflows.map((workflow) => (
+          {initialData.map((workflow) => (
             <TableRow key={workflow.id}>
               <TableCell className="font-medium">{workflow.name}</TableCell>
               <TableCell>{workflow.description}</TableCell>
@@ -82,7 +79,11 @@ export function WorkflowsTable({ initialData }: WorkflowsTableProps) {
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
+                    <Button
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
+                      disabled={isLoading}
+                    >
                       <span className="sr-only">Open menu</span>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
@@ -90,7 +91,7 @@ export function WorkflowsTable({ initialData }: WorkflowsTableProps) {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
                       onClick={() => handleDelete(workflow.id)}
-                      className="text-destructive"
+                      disabled={isLoading}
                     >
                       Delete
                     </DropdownMenuItem>

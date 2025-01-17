@@ -1,31 +1,31 @@
-import { headers } from "next/headers"
+import { Metadata } from "next"
 import { prisma } from "@/lib/prisma"
-import { FormTemplateList } from "@/components/forms/templates/FormTemplateList"
-import { FormTemplateListWrapper } from "./templates-wrapper"
+import { FormTemplatesWrapper } from "./templates-wrapper"
 
-async function getFormTemplates() {
-  return prisma.formTemplate.findMany({
-    include: {
-      department: true,
-      phase: true,
-      workflow: true,
-      versions: {
-        orderBy: {
-          version: "desc"
-        },
-        take: 1
-      }
-    },
-    orderBy: {
-      updatedAt: "desc"
-    }
-  })
+export const metadata: Metadata = {
+  title: "Form Templates",
+  description: "Manage form templates",
 }
 
-export default async function FormTemplates() {
-  const templates = await getFormTemplates()
-  
+export default async function FormTemplatesPage() {
+  const templates = await prisma.formTemplate.findMany({
+    include: {
+      department: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  })
+
   return (
-    <FormTemplateListWrapper templates={templates} />
+    <div className="container mx-auto py-10">
+      <FormTemplatesWrapper templates={templates} />
+    </div>
   )
 } 

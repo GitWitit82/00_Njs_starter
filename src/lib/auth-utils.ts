@@ -1,53 +1,27 @@
-import { getServerSession } from "next-auth/next"
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { Role } from "@prisma/client"
 
-/**
- * Get the current session on the server side
- */
-export async function getCurrentUser() {
-  const session = await getServerSession(authOptions)
-  return session?.user
-}
+export function RouteHandler<T>(
+  handler: (request: Request, context: { params: T }) => Promise<Response>,
+  requiredRole?: Role
+) {
+  return async (request: Request, context: { params: T }) => {
+    try {
+      const session = await getServerSession(authOptions)
+      if (!session?.user) {
+        return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+      }
 
-/**
- * Check if the current user has the required role
- * @param requiredRole - The role required to access the resource
- */
-export async function checkUserRole(requiredRole: Role) {
-  const user = await getCurrentUser()
-  if (!user) return false
+      if (requiredRole && session.user.role !== requiredRole) {
+        return NextResponse.json({ message: "Forbidden" }, { status: 403 })
+      }
 
-  switch (requiredRole) {
-    case "ADMIN":
-      return user.role === "ADMIN"
-    case "MANAGER":
-      return ["ADMIN", "MANAGER"].includes(user.role)
-    case "USER":
-      return ["ADMIN", "MANAGER", "USER"].includes(user.role)
-    default:
-      return false
-  }
-}
-
-/**
- * Higher-order function to protect API routes based on roles
- * @param handler - The API route handler
- * @param requiredRole - The role required to access the route
- */
-export function withRoleProtection(handler: Function, requiredRole: Role) {
-  return async (req: Request, ...args: any[]) => {
-    const user = await getCurrentUser()
-    
-    if (!user) {
-      return new Response("Unauthorized", { status: 401 })
+      return handler(request, context)
+    } catch (error) {
+      console.error(error)
+      return NextResponse.json({ message: "Internal server error" }, { status: 500 })
     }
-
-    const hasAccess = await checkUserRole(requiredRole)
-    if (!hasAccess) {
-      return new Response("Forbidden", { status: 403 })
-    }
-
-    return handler(req, ...args)
   }
 } 

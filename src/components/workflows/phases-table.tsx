@@ -6,10 +6,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Phase } from "@prisma/client"
-import { Plus } from "lucide-react"
-
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -19,101 +16,149 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { PhasesModal } from "./phases-modal"
-
-interface PhaseWithTaskCount extends Phase {
-  _count?: {
-    tasks: number
-  }
-}
+import { Phase } from "@prisma/client"
+import { PhaseModal } from "./phase-modal"
 
 interface PhasesTableProps {
   workflowId: string
-  phases: PhaseWithTaskCount[]
-  isLoading?: boolean
+  phases: Phase[]
 }
 
-export function PhasesTable({
-  workflowId,
-  phases,
-  isLoading = false,
-}: PhasesTableProps) {
-  const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+/**
+ * PhasesTable component for displaying and managing workflow phases
+ * @param {PhasesTableProps} props - Component props
+ * @returns {JSX.Element} Rendered component
+ */
+export function PhasesTable({ workflowId, phases }: PhasesTableProps) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedPhase, setSelectedPhase] = useState<Phase | null>(null)
+  const [showModal, setShowModal] = useState(false)
 
-  const handlePhaseSuccess = () => {
-    setModalOpen(false)
-    router.refresh()
+  const handleCreatePhase = async (data: Partial<Phase>) => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/workflows/${workflowId}/phases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create phase")
+      }
+
+      toast.success("Phase created successfully")
+      setShowModal(false)
+    } catch {
+      toast.error("Failed to create phase")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  if (isLoading) {
-    return <div>Loading phases...</div>
+  const handleUpdatePhase = async (phaseId: string, data: Partial<Phase>) => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(
+        `/api/workflows/${workflowId}/phases/${phaseId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to update phase")
+      }
+
+      toast.success("Phase updated successfully")
+      setShowModal(false)
+    } catch {
+      toast.error("Failed to update phase")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeletePhase = async (phaseId: string) => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(
+        `/api/workflows/${workflowId}/phases/${phaseId}`,
+        {
+          method: "DELETE",
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to delete phase")
+      }
+
+      toast.success("Phase deleted successfully")
+      setShowModal(false)
+    } catch {
+      toast.error("Failed to delete phase")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
     <div className="space-y-4">
-      {error && (
-        <div className="rounded-md bg-destructive/15 p-4 text-destructive">
-          {error}
-        </div>
-      )}
-
       <div className="flex justify-end">
-        <Button onClick={() => setModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Phase
+        <Button
+          onClick={() => {
+            setSelectedPhase(null)
+            setShowModal(true)
+          }}
+        >
+          Add Phase
         </Button>
       </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Tasks</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {phases.length === 0 ? (
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={3} className="text-center">
-                No phases found. Create one to get started.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Order</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
-          ) : (
-            phases.map((phase) => (
+          </TableHeader>
+          <TableBody>
+            {phases.map((phase) => (
               <TableRow key={phase.id}>
-                <TableCell className="font-medium">{phase.name}</TableCell>
-                <TableCell>{phase._count?.tasks || 0} tasks</TableCell>
+                <TableCell>{phase.name}</TableCell>
+                <TableCell>{phase.description}</TableCell>
+                <TableCell>{phase.order}</TableCell>
                 <TableCell>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      router.push(`/workflows/${workflowId}/phases/${phase.id}/tasks`)
-                    }
+                    variant="ghost"
+                    onClick={() => {
+                      setSelectedPhase(phase)
+                      setShowModal(true)
+                    }}
                   >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Manage Tasks
+                    Edit
                   </Button>
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-      <PhasesModal
-        workflow={{ 
-          id: workflowId,
-          name: "",
-          description: null,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        onSuccess={handlePhaseSuccess}
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <PhaseModal
+        phase={selectedPhase}
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSubmit={selectedPhase ? handleUpdatePhase : handleCreatePhase}
+        onDelete={selectedPhase ? handleDeletePhase : undefined}
+        isLoading={isLoading}
       />
     </div>
   )

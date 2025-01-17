@@ -1,56 +1,41 @@
-import { PrismaAdapter } from "@auth/prisma-adapter"
 import { NextAuthOptions } from "next-auth"
+import { PrismaAdapter } from "@auth/prisma-adapter"
 import CredentialsProvider from "next-auth/providers/credentials"
-import bcrypt from "bcryptjs"
-
 import { prisma } from "@/lib/prisma"
+import bcrypt from "bcryptjs"
+import { Role } from "@prisma/client"
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+    strategy: "jwt"
   },
   pages: {
-    signIn: "/auth/login",
-    error: "/auth/error",
+    signIn: "/auth/login"
   },
   providers: [
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        name: { label: "Username", type: "text" },
+        username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.name || !credentials?.password) {
-          throw new Error("Invalid credentials")
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error("Missing username or password")
         }
 
         const user = await prisma.user.findUnique({
-          where: {
-            name: credentials.name
-          },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            hashedPassword: true,
-          }
+          where: { name: credentials.username }
         })
 
-        if (!user || !user.hashedPassword) {
+        if (!user || !user.password) {
           throw new Error("User not found")
         }
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.hashedPassword
-        )
+        const isValid = await bcrypt.compare(credentials.password, user.password)
 
-        if (!isPasswordValid) {
+        if (!isValid) {
           throw new Error("Invalid password")
         }
 
@@ -58,37 +43,25 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: user.role || Role.USER
         }
       }
     })
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      if (trigger === "update" && session?.name) {
-        token.name = session.name
-      }
-      
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.name = user.name
-        token.email = user.email
         token.role = user.role
       }
-      
       return token
     },
     async session({ session, token }) {
       if (token) {
-        session.user = {
-          id: token.id as string,
-          name: token.name,
-          email: token.email,
-          role: token.role as string,
-        }
+        session.user.id = token.id as string
+        session.user.role = token.role as string
       }
       return session
     }
-  },
-  debug: process.env.NODE_ENV === "development",
+  }
 } 

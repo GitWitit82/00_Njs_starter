@@ -1,101 +1,152 @@
-import { prisma } from "@/lib/prisma"
-import { addBusinessDays, isAfter, isBefore, startOfDay } from "date-fns"
+import { prisma } from "@/lib/db"
+import { TaskStatus } from "@prisma/client"
 
-/**
- * Service for handling task scheduling functionality
- */
+export enum ActivityType {
+  SCHEDULE_UPDATE = "SCHEDULE_UPDATE",
+  ACTUAL_DATES_UPDATE = "ACTUAL_DATES_UPDATE",
+  STATUS_CHANGE = "STATUS_CHANGE",
+  PRIORITY_CHANGE = "PRIORITY_CHANGE",
+  ASSIGNMENT_CHANGE = "ASSIGNMENT_CHANGE",
+}
+
+interface TaskScheduleData {
+  scheduledStart?: Date | null
+  scheduledEnd?: Date | null
+  actualStart?: Date | null
+  actualEnd?: Date | null
+}
+
 export class TaskSchedulingService {
   /**
-   * Calculate the end date for a task based on start date and man hours
+   * Calculate the end date based on start date and man hours
    * Assumes 8-hour workdays and skips weekends
    */
   static calculateEndDate(startDate: Date, manHours: number): Date {
-    const hoursPerDay = 8
-    const daysNeeded = Math.ceil(manHours / hoursPerDay)
-    return addBusinessDays(startDate, daysNeeded)
+    const workHoursPerDay = 8
+    const workDays = Math.ceil(manHours / workHoursPerDay)
+    
+    const endDate = new Date(startDate)
+    let daysAdded = 0
+    
+    while (daysAdded < workDays) {
+      endDate.setDate(endDate.getDate() + 1)
+      // Skip weekends
+      if (endDate.getDay() !== 0 && endDate.getDay() !== 6) {
+        daysAdded++
+      }
+    }
+    
+    return endDate
   }
 
   /**
    * Schedule a task with given constraints
    */
-  static async scheduleTask(taskId: string, startDate: Date) {
+  static async scheduleTask(taskId: string, startDate: Date, userId: string) {
     const task = await prisma.projectTask.findUnique({
       where: { id: taskId },
       include: {
         project: true,
-        phase: true
-      }
+      },
     })
 
-    if (!task) throw new Error("Task not found")
+    if (!task) {
+      throw new Error("Task not found")
+    }
+
+    if (task.project) {
+      const projectStartDate = task.project.startDate
+      const projectEndDate = task.project.endDate
+
+      if (startDate < projectStartDate) {
+        throw new Error("Task cannot start before project start date")
+      }
+
+      if (projectEndDate && this.calculateEndDate(startDate, task.manHours) > projectEndDate) {
+        throw new Error("Task duration exceeds project end date")
+      }
+    }
 
     const endDate = this.calculateEndDate(startDate, task.manHours)
 
-    // Validate against project dates
-    if (task.project.endDate && isAfter(endDate, task.project.endDate)) {
-      throw new Error("Task end date exceeds project end date")
-    }
-
-    if (isBefore(startDate, task.project.startDate)) {
-      throw new Error("Task start date is before project start date")
-    }
-
-    // Update task schedule
-    return prisma.projectTask.update({
+    const updatedTask = await prisma.projectTask.update({
       where: { id: taskId },
       data: {
         scheduledStart: startDate,
         scheduledEnd: endDate,
         taskActivities: {
           create: {
-            type: "SCHEDULE_UPDATE",
-            details: `Task scheduled: ${startDate.toISOString()} - ${endDate.toISOString()}`,
-            userId: "system" // You might want to pass the actual user ID
-          }
-        }
-      }
+            type: ActivityType.SCHEDULE_UPDATE,
+            userId,
+            content: `Task scheduled: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
+            details: JSON.stringify({ startDate, endDate }),
+          },
+        },
+      },
+      include: {
+        taskActivities: true,
+        project: true,
+        phase: true,
+        department: true,
+        assignedTo: true,
+      },
     })
+
+    return updatedTask
   }
 
   /**
-   * Update actual start/end dates for a task
+   * Update actual start and end dates for a task
    */
-  static async updateActualDates(taskId: string, data: {
-    actualStart?: Date
-    actualEnd?: Date
-  }) {
+  static async updateActualDates(taskId: string, data: TaskScheduleData, userId: string) {
     const task = await prisma.projectTask.findUnique({
-      where: { id: taskId }
+      where: { id: taskId },
     })
 
-    if (!task) throw new Error("Task not found")
+    if (!task) {
+      throw new Error("Task not found")
+    }
 
-    return prisma.projectTask.update({
+    let status = task.status
+
+    if (data.actualStart && !task.actualStart) {
+      status = TaskStatus.IN_PROGRESS
+    }
+
+    if (data.actualEnd && !task.actualEnd) {
+      status = TaskStatus.COMPLETED
+    }
+
+    const updatedTask = await prisma.projectTask.update({
       where: { id: taskId },
       data: {
-        actualStart: data.actualStart,
-        actualEnd: data.actualEnd,
-        status: data.actualEnd ? "COMPLETED" : (data.actualStart ? "IN_PROGRESS" : task.status),
+        ...data,
+        status,
         taskActivities: {
           create: {
-            type: "ACTUAL_DATES_UPDATE",
-            details: `Actual dates updated: Start - ${data.actualStart?.toISOString() || 'N/A'}, End - ${data.actualEnd?.toISOString() || 'N/A'}`,
-            userId: "system" // You might want to pass the actual user ID
-          }
-        }
-      }
+            type: ActivityType.ACTUAL_DATES_UPDATE,
+            userId,
+            content: `Task actual dates updated`,
+            details: JSON.stringify(data),
+          },
+        },
+      },
+      include: {
+        taskActivities: true,
+        project: true,
+        phase: true,
+        department: true,
+        assignedTo: true,
+      },
     })
+
+    return updatedTask
   }
 
   /**
-   * Calculate schedule efficiency (actual vs planned duration)
+   * Calculate efficiency based on actual vs planned duration
    */
-  static calculateEfficiency(task: {
-    scheduledStart?: Date | null
-    scheduledEnd?: Date | null
-    actualStart?: Date | null
-    actualEnd?: Date | null
-  }): number | null {
+  static calculateEfficiency(task: { scheduledStart: Date | null; scheduledEnd: Date | null; actualStart: Date | null; actualEnd: Date | null }): number | null {
     if (!task.scheduledStart || !task.scheduledEnd || !task.actualStart || !task.actualEnd) {
       return null
     }
@@ -111,41 +162,27 @@ export class TaskSchedulingService {
    */
   static async getProjectMetrics(projectId: string) {
     const tasks = await prisma.projectTask.findMany({
-      where: { projectId },
-      select: {
-        scheduledStart: true,
-        scheduledEnd: true,
-        actualStart: true,
-        actualEnd: true,
-        manHours: true
-      }
+      where: {
+        projectId,
+        status: TaskStatus.COMPLETED,
+      },
     })
 
-    let totalEfficiency = 0
-    let tasksWithEfficiency = 0
-    let totalPlannedHours = 0
-    let totalActualHours = 0
+    const efficiencies = tasks
+      .map(task => this.calculateEfficiency(task))
+      .filter((efficiency): efficiency is number => efficiency !== null)
 
-    tasks.forEach(task => {
-      const efficiency = this.calculateEfficiency(task)
-      if (efficiency !== null) {
-        totalEfficiency += efficiency
-        tasksWithEfficiency++
-      }
+    const averageEfficiency = efficiencies.length > 0
+      ? efficiencies.reduce((sum, eff) => sum + eff, 0) / efficiencies.length
+      : null
 
-      totalPlannedHours += task.manHours
-      if (task.actualStart && task.actualEnd) {
-        const actualHours = (task.actualEnd.getTime() - task.actualStart.getTime()) / (1000 * 60 * 60)
-        totalActualHours += actualHours
-      }
-    })
+    const totalPlannedHours = tasks.reduce((sum, task) => sum + task.manHours, 0)
+    const completedTasks = tasks.length
 
     return {
-      averageEfficiency: tasksWithEfficiency > 0 ? totalEfficiency / tasksWithEfficiency : null,
+      averageEfficiency,
       totalPlannedHours,
-      totalActualHours,
-      completedTasks: tasks.filter(t => t.actualEnd).length,
-      totalTasks: tasks.length
+      completedTasks,
     }
   }
 } 

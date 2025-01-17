@@ -5,21 +5,24 @@
 
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { Priority } from "@prisma/client"
 import { z } from "zod"
 
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { WorkflowTaskCreatePayload, WorkflowTaskUpdatePayload } from "@/types/workflows"
 
+/**
+ * Schema for validating task requests
+ */
 const taskSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
-  manHours: z.number().min(0.5),
-  order: z.number().int().min(0),
+  priority: z.nativeEnum(Priority),
+  manHours: z.number().min(0).optional(),
+  order: z.number().int().min(0).optional(),
   departmentId: z.string().optional(),
-  formTemplateId: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
-  dependencies: z.array(z.string()).optional(), // Array of task IDs this task depends on
+  dependencies: z.array(z.string()).optional(),
 })
 
 /**
@@ -31,9 +34,9 @@ export async function GET(
   { params }: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
     const tasks = await prisma.workflowTask.findMany({
@@ -41,26 +44,50 @@ export async function GET(
         phaseId: params.phaseId,
       },
       include: {
-        department: true,
-        dependencies: {
-          include: {
-            dependsOnTask: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-        formTemplate: true,
+        dependencies: {
+          include: {
+            dependsOnTask: {
+              include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        dependsOn: {
+          include: {
+            task: {
+              include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: {
-        order: 'asc',
+        order: "asc",
       },
     })
 
     return NextResponse.json(tasks)
   } catch (error) {
-    console.error('Error fetching tasks:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch tasks' },
-      { status: 500 }
-    )
+    console.error("Error fetching tasks:", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
@@ -73,18 +100,18 @@ export async function POST(
   { params }: { params: { workflowId: string; phaseId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
     const json = await req.json()
-    const body = taskSchema.parse(json)
+    const body = taskSchema.parse(json) as WorkflowTaskCreatePayload
 
     // Get the current highest order
     const highestOrder = await prisma.workflowTask.findFirst({
       where: { phaseId: params.phaseId },
-      orderBy: { order: 'desc' },
+      orderBy: { order: "desc" },
       select: { order: true },
     })
 
@@ -97,8 +124,6 @@ export async function POST(
         manHours: body.manHours,
         order: body.order ?? (highestOrder?.order ?? -1) + 1,
         departmentId: body.departmentId,
-        formTemplateId: body.formTemplateId,
-        metadata: body.metadata,
         phase: {
           connect: { id: params.phaseId },
         },
@@ -111,7 +136,6 @@ export async function POST(
         data: body.dependencies.map((dependsOnId) => ({
           taskId: task.id,
           dependsOnId,
-          type: 'FINISH_TO_START',
         })),
       })
     }
@@ -120,45 +144,70 @@ export async function POST(
     const completeTask = await prisma.workflowTask.findUnique({
       where: { id: task.id },
       include: {
-        department: true,
-        dependencies: {
-          include: {
-            dependsOnTask: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
           },
         },
-        formTemplate: true,
+        dependencies: {
+          include: {
+            dependsOnTask: {
+              include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        dependsOn: {
+          include: {
+            task: {
+              include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     })
 
     return NextResponse.json(completeTask)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 })
+      return new NextResponse("Invalid request data", { status: 422 })
     }
-    console.error('Error creating task:', error)
-    return NextResponse.json(
-      { error: 'Failed to create task' },
-      { status: 500 }
-    )
+
+    console.error("Error creating task:", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
 /**
- * PUT /api/workflows/:workflowId/phases/:phaseId/tasks/:taskId
+ * PATCH /api/workflows/:workflowId/phases/:phaseId/tasks/:taskId
  * Updates an existing task
  */
-export async function PUT(
+export async function PATCH(
   req: Request,
   { params }: { params: { workflowId: string; phaseId: string; taskId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
     const json = await req.json()
-    const body = taskSchema.parse(json)
+    const body = taskSchema.partial().parse(json) as WorkflowTaskUpdatePayload
 
     // Update task and dependencies in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -175,8 +224,6 @@ export async function PUT(
           manHours: body.manHours,
           order: body.order,
           departmentId: body.departmentId,
-          formTemplateId: body.formTemplateId,
-          metadata: body.metadata,
         },
       })
 
@@ -193,7 +240,6 @@ export async function PUT(
             data: body.dependencies.map((dependsOnId) => ({
               taskId: task.id,
               dependsOnId,
-              type: 'FINISH_TO_START',
             })),
           })
         }
@@ -203,13 +249,40 @@ export async function PUT(
       return tx.workflowTask.findUnique({
         where: { id: task.id },
         include: {
-          department: true,
-          dependencies: {
-            include: {
-              dependsOnTask: true,
+          department: {
+            select: {
+              id: true,
+              name: true,
             },
           },
-          formTemplate: true,
+          dependencies: {
+            include: {
+              dependsOnTask: {
+                include: {
+                  department: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          dependsOn: {
+            include: {
+              task: {
+                include: {
+                  department: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       })
     })
@@ -217,13 +290,11 @@ export async function PUT(
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 })
+      return new NextResponse("Invalid request data", { status: 422 })
     }
-    console.error('Error updating task:', error)
-    return NextResponse.json(
-      { error: 'Failed to update task' },
-      { status: 500 }
-    )
+
+    console.error("Error updating task:", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 }
 
@@ -236,13 +307,13 @@ export async function DELETE(
   { params }: { params: { workflowId: string; phaseId: string; taskId: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    // Handle deletion and reordering in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Delete task and reorder remaining tasks in a transaction
+    await prisma.$transaction(async (tx) => {
       // Get the task to be deleted
       const task = await tx.workflowTask.findUnique({
         where: { id: params.taskId },
@@ -250,7 +321,7 @@ export async function DELETE(
       })
 
       if (!task) {
-        throw new Error('Task not found')
+        throw new Error("Task not found")
       }
 
       // Delete the task
@@ -262,39 +333,17 @@ export async function DELETE(
       await tx.workflowTask.updateMany({
         where: {
           phaseId: params.phaseId,
-          order: {
-            gt: task.order,
-          },
+          order: { gt: task.order },
         },
         data: {
-          order: {
-            decrement: 1,
-          },
-        },
-      })
-
-      // Return updated task list
-      return tx.workflowTask.findMany({
-        where: { phaseId: params.phaseId },
-        orderBy: { order: 'asc' },
-        include: {
-          department: true,
-          dependencies: {
-            include: {
-              dependsOnTask: true,
-            },
-          },
-          formTemplate: true,
+          order: { decrement: 1 },
         },
       })
     })
 
-    return NextResponse.json(result)
+    return new NextResponse(null, { status: 204 })
   } catch (error) {
-    console.error('Error deleting task:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete task' },
-      { status: 500 }
-    )
+    console.error("Error deleting task:", error)
+    return new NextResponse("Internal error", { status: 500 })
   }
 } 

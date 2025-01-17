@@ -9,12 +9,21 @@ import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { TaskStatus, Priority } from "@prisma/client";
 
+/**
+ * Schema for validating task update requests
+ */
 const updateTaskSchema = z.object({
-  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "ON_HOLD", "COMPLETED"]).optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
+  priority: z.nativeEnum(Priority).optional(),
+  assignedToId: z.string().nullable().optional(),
+  departmentId: z.string().nullable().optional(),
 });
 
+/**
+ * PATCH handler for updating tasks
+ */
 export async function PATCH(
   request: Request,
   { params }: { params: { taskId: string } }
@@ -28,10 +37,22 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateTaskSchema.parse(body);
 
-    const activityType = validatedData.status ? "STATUS_CHANGE" : "PRIORITY_CHANGE";
-    const activityDetails = validatedData.status
-      ? `Status changed to ${validatedData.status.toLowerCase().replace("_", " ")}`
-      : `Priority changed to ${validatedData.priority?.toLowerCase()}`;
+    // Determine activity type and content
+    let activityType: "STATUS_CHANGE" | "PRIORITY_CHANGE" | "ASSIGNMENT" = "STATUS_CHANGE";
+    let content = "";
+
+    if (validatedData.status) {
+      activityType = "STATUS_CHANGE";
+      content = `Status changed to ${validatedData.status.toLowerCase().replace("_", " ")}`;
+    } else if (validatedData.priority) {
+      activityType = "PRIORITY_CHANGE";
+      content = `Priority changed to ${validatedData.priority.toLowerCase()}`;
+    } else if (validatedData.assignedToId !== undefined) {
+      activityType = "ASSIGNMENT";
+      content = validatedData.assignedToId
+        ? "Task assigned to user"
+        : "Task unassigned";
+    }
 
     const task = await prisma.projectTask.update({
       where: { id: params.taskId },
@@ -40,16 +61,38 @@ export async function PATCH(
         activity: {
           create: {
             type: activityType,
+            content,
             userId: session.user.id,
-            details: activityDetails,
           },
         },
       },
       include: {
-        assignedTo: true,
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         activity: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
           orderBy: {
             createdAt: "desc",

@@ -1,141 +1,129 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/prisma"
-import { z } from "zod"
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
+import { FormInstanceStatus, Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { authOptions } from "@/lib/auth";
 
-/**
- * Schema for creating a form instance
- */
 const createInstanceSchema = z.object({
   templateId: z.string(),
-  versionId: z.string(),
-  projectId: z.string(),
-  projectTaskId: z.string(),
-})
+  projectId: z.string().optional(),
+  taskId: z.string().optional(),
+  data: z.unknown().default({}),
+  metadata: z.unknown().optional(),
+});
 
-/**
- * GET /api/forms/instances
- * Get form instances with optional filtering
- */
-export async function GET(req: Request) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
+const querySchema = z.object({
+  projectId: z.string().optional(),
+  taskId: z.string().optional(),
+  status: z.nativeEnum(FormInstanceStatus).optional(),
+});
+
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const validatedQuery = querySchema.parse(Object.fromEntries(searchParams));
+
+  const where: Prisma.FormInstanceWhereInput = {};
+  Object.entries(validatedQuery).forEach(([key, value]) => {
+    if (value) {
+      where[key as keyof Prisma.FormInstanceWhereInput] = value;
     }
+  });
 
-    const { searchParams } = new URL(req.url)
-    const projectId = searchParams.get("projectId")
-
-    const instances = await prisma.formInstance.findMany({
-      where: {
-        ...(projectId ? { projectId } : {}),
-      },
+  const [instances, count] = await Promise.all([
+    prisma.formInstance.findMany({
+      where,
       include: {
         template: {
-          select: {
-            name: true,
-            type: true,
-            priority: true,
-          },
-        },
-        version: {
-          select: {
+          include: {
             version: true,
-            schema: true,
-            layout: true,
-            style: true,
+            formCompletionRequirements: {
+              include: {
+                dependsOn: true,
+              },
+            },
           },
         },
-        responses: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 1,
-          select: {
-            status: true,
-            updatedAt: true,
-          },
-        },
+        project: true,
+        task: true,
       },
       orderBy: {
         createdAt: "desc",
       },
-    })
+    }),
+    prisma.formInstance.count({ where }),
+  ]);
 
-    return NextResponse.json(instances)
-  } catch (error) {
-    console.error("[FORM_INSTANCES_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
-  }
+  return NextResponse.json({ instances, count });
 }
 
-/**
- * POST /api/forms/instances
- * Create a new form instance
- */
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const json = await req.json()
-    const body = createInstanceSchema.parse(json)
-
-    // Verify that the template and version exist
-    const template = await prisma.formTemplate.findUnique({
-      where: { id: body.templateId },
-      include: {
-        versions: {
-          where: { id: body.versionId },
-        },
-      },
-    })
-
-    if (!template) {
-      return new NextResponse("Template not found", { status: 404 })
-    }
-
-    if (template.versions.length === 0) {
-      return new NextResponse("Version not found", { status: 404 })
-    }
-
-    // Create the form instance
-    const instance = await prisma.formInstance.create({
-      data: {
-        templateId: body.templateId,
-        versionId: body.versionId,
-        projectId: body.projectId,
-        projectTaskId: body.projectTaskId,
-      },
-      include: {
-        template: {
-          select: {
-            name: true,
-            type: true,
-            priority: true,
-          },
-        },
-        version: {
-          select: {
-            version: true,
-            schema: true,
-            layout: true,
-            style: true,
-          },
-        },
-      },
-    })
-
-    return NextResponse.json(instance)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
-    }
-
-    console.error("[FORM_INSTANCE_POST]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const validatedBody = createInstanceSchema.parse(await request.json());
+
+  const template = await prisma.formTemplate.findUnique({
+    where: { id: validatedBody.templateId },
+    include: {
+      version: true,
+      formCompletionRequirements: {
+        include: {
+          dependsOn: true,
+        },
+      },
+    },
+  });
+
+  if (!template) {
+    return NextResponse.json(
+      { error: "Form template not found" },
+      { status: 404 }
+    );
+  }
+
+  if (!template.version) {
+    return NextResponse.json(
+      { error: "Form template has no version" },
+      { status: 404 }
+    );
+  }
+
+  const data = validatedBody.data || template.version.defaultValues || {};
+  const metadata = validatedBody.metadata || {};
+
+  const formInstance = await prisma.formInstance.create({
+    data: {
+      templateId: template.id,
+      versionId: template.version.id,
+      projectId: validatedBody.projectId,
+      taskId: validatedBody.taskId,
+      status: FormInstanceStatus.DRAFT,
+      data: data as Prisma.JsonObject,
+      metadata: metadata as Prisma.JsonObject,
+    },
+    include: {
+      template: {
+        include: {
+          version: true,
+          formCompletionRequirements: {
+            include: {
+              dependsOn: true,
+            },
+          },
+        },
+      },
+      project: true,
+      task: true,
+    },
+  });
+
+  return NextResponse.json(formInstance);
 } 

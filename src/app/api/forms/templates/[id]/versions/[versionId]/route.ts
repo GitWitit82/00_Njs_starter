@@ -1,141 +1,251 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
+import { prisma } from "@/lib/db"
+import { authOptions } from "@/lib/auth"
 
-/**
- * Schema for updating a form version
- */
-const updateVersionSchema = z.object({
-  isActive: z.boolean().optional(),
-  changelog: z.string().optional(),
+const versionSchema = z.object({
+  name: z.string().min(1, "Version name is required"),
+  description: z.string().optional(),
+  schema: z.record(z.unknown()).default({}),
+  layout: z.record(z.unknown()).default({}),
+  style: z.record(z.unknown()).default({}),
+  defaultValues: z.record(z.unknown()).default({}),
+  metadata: z.record(z.unknown()).optional().default({}),
+  isCurrent: z.boolean().default(false)
 })
 
-/**
- * GET /api/forms/templates/[id]/versions/[versionId]
- * Get a specific version of a form template
- */
 export async function GET(
-  req: Request,
+  request: Request,
   { params }: { params: { id: string; versionId: string } }
 ) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const version = await prisma.formVersion.findFirst({
+  try {
+    const version = await prisma.formTemplateVersion.findUnique({
       where: {
         id: params.versionId,
-        templateId: params.id,
+        templateId: params.id
       },
       include: {
-        createdBy: {
+        template: {
           select: {
             id: true,
             name: true,
-            email: true,
-          },
-        },
-      },
+            description: true,
+            completionRequirements: {
+              include: {
+                dependsOn: true
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!version) {
-      return new NextResponse("Version not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Form template version not found" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json(version)
   } catch (error) {
     console.error("[FORM_VERSION_GET]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * PATCH /api/forms/templates/[id]/versions/[versionId]
- * Update a specific version of a form template
- */
 export async function PATCH(
-  req: Request,
+  request: Request,
   { params }: { params: { id: string; versionId: string } }
 ) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const validatedBody = versionSchema.partial().parse(await request.json())
 
-    const json = await req.json()
-    const body = updateVersionSchema.parse(json)
-
-    const version = await prisma.formVersion.findFirst({
+    const version = await prisma.formTemplateVersion.findUnique({
       where: {
         id: params.versionId,
-        templateId: params.id,
+        templateId: params.id
       },
+      include: {
+        template: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!version) {
-      return new NextResponse("Version not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Form template version not found" },
+        { status: 404 }
+      )
     }
 
-    const updatedVersion = await prisma.formVersion.update({
-      where: { id: version.id },
-      data: body,
+    // If setting this version as current, check if there are any form instances using the current version
+    if (validatedBody.isCurrent && version.template.versions[0]?.id !== version.id) {
+      const instanceCount = await prisma.formInstance.count({
+        where: {
+          templateId: params.id,
+          versionId: version.template.versions[0]?.id
+        }
+      })
+
+      if (instanceCount > 0) {
+        return NextResponse.json(
+          { error: "Cannot change current version while form instances exist" },
+          { status: 400 }
+        )
+      }
+
+      await prisma.formTemplateVersion.updateMany({
+        where: {
+          templateId: params.id,
+          id: {
+            not: params.versionId
+          }
+        },
+        data: {
+          isCurrent: false
+        }
+      })
+    }
+
+    const updatedVersion = await prisma.formTemplateVersion.update({
+      where: {
+        id: params.versionId
+      },
+      data: {
+        name: validatedBody.name,
+        description: validatedBody.description,
+        schema: validatedBody.schema as Prisma.JsonObject | undefined,
+        layout: validatedBody.layout as Prisma.JsonObject | undefined,
+        style: validatedBody.style as Prisma.JsonObject | undefined,
+        defaultValues: validatedBody.defaultValues as Prisma.JsonObject | undefined,
+        metadata: validatedBody.metadata as Prisma.JsonObject,
+        isCurrent: validatedBody.isCurrent
+      },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            completionRequirements: {
+              include: {
+                dependsOn: true
+              }
+            }
+          }
+        }
+      }
     })
 
     return NextResponse.json(updatedVersion)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
+      return NextResponse.json(
+        { error: "Invalid request data", details: error.errors },
+        { status: 422 }
+      )
     }
-
     console.error("[FORM_VERSION_PATCH]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * POST /api/forms/templates/[id]/versions/[versionId]/restore
- * Restore a form template to a specific version
- */
-export async function POST(
-  req: Request,
+export async function DELETE(
+  request: Request,
   { params }: { params: { id: string; versionId: string } }
 ) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const version = await prisma.formVersion.findFirst({
+  try {
+    const version = await prisma.formTemplateVersion.findUnique({
       where: {
         id: params.versionId,
-        templateId: params.id,
+        templateId: params.id
       },
+      include: {
+        template: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!version) {
-      return new NextResponse("Version not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Form template version not found" },
+        { status: 404 }
+      )
     }
 
-    // Update the template with the version's data
-    const updatedTemplate = await prisma.formTemplate.update({
-      where: { id: params.id },
-      data: {
-        schema: version.schema,
-        layout: version.layout,
-        style: version.style,
-        metadata: version.metadata,
-        currentVersion: version.version,
-      },
+    // Don't allow deleting the current version
+    if (version.isCurrent) {
+      return NextResponse.json(
+        { error: "Cannot delete the current version" },
+        { status: 400 }
+      )
+    }
+
+    // Check if there are any form instances using this version
+    const instanceCount = await prisma.formInstance.count({
+      where: {
+        templateId: params.id,
+        versionId: params.versionId
+      }
     })
 
-    return NextResponse.json(updatedTemplate)
+    if (instanceCount > 0) {
+      return NextResponse.json(
+        { error: "Cannot delete version with existing form instances" },
+        { status: 400 }
+      )
+    }
+
+    await prisma.formTemplateVersion.delete({
+      where: {
+        id: params.versionId
+      }
+    })
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[FORM_VERSION_RESTORE]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("[FORM_VERSION_DELETE]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

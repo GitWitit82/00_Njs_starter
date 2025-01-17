@@ -1,87 +1,33 @@
 import { NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+import { RouteHandler } from "@/lib/auth-utils"
+import { Role } from "@prisma/client"
 
-import { db } from "@/lib/db"
-import { getCurrentUser } from "@/lib/auth-utils"
+type RouteParams = {
+  workflowId: string
+  phaseId: string
+}
 
-/**
- * PUT /api/workflows/[workflowId]/phases/[phaseId]/tasks/reorder
- * Reorder tasks within a phase
- */
-export async function PUT(
-  req: Request,
-  context: { params: { workflowId: string; phaseId: string } }
-) {
+export const PUT = RouteHandler<RouteParams>(async (req, { params }) => {
   try {
-    const user = await getCurrentUser()
-
-    if (!user || !["ADMIN", "MANAGER"].includes(user.role)) {
-      return new NextResponse("Unauthorized", { status: 403 })
-    }
-
-    const { params } = context
-    const workflowId = params?.workflowId
-    const phaseId = params?.phaseId
-
-    if (!workflowId || !phaseId) {
-      return new NextResponse("Missing required parameters", { status: 400 })
-    }
-
-    const body = await req.json()
-    const { tasks } = body
-
-    if (!Array.isArray(tasks)) {
-      return NextResponse.json(
-        { error: "Invalid tasks array" },
-        { status: 400 }
-      )
-    }
-
-    // Check if phase exists and belongs to the workflow
-    const phase = await db.phase.findUnique({
-      where: {
-        id: phaseId,
-        workflowId,
-      },
-    })
-
-    if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
-    }
-
-    // Update all tasks in a transaction
-    await db.$transaction(
-      tasks.map((task) =>
-        db.task.update({
-          where: {
+    const { tasks } = await req.json()
+    
+    // Update task orders in a transaction
+    await prisma.$transaction(
+      tasks.map((task: { id: string; order: number }) =>
+        prisma.task.update({
+          where: { 
             id: task.id,
-            phaseId,
+            phaseId: params.phaseId 
           },
-          data: {
-            order: task.order,
-          },
+          data: { order: task.order }
         })
       )
     )
 
-    // Fetch updated phase with tasks
-    const updatedPhase = await db.phase.findUnique({
-      where: {
-        id: phaseId,
-      },
-      include: {
-        tasks: {
-          orderBy: {
-            order: "asc",
-          },
-        },
-      },
-    })
-
-    return NextResponse.json(updatedPhase)
+    return NextResponse.json({ message: "Tasks reordered successfully" })
   } catch (error) {
-    if (error instanceof Error) {
-      console.error("[TASKS_REORDER]", error.message)
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error(error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
-} 
+}, Role.MANAGER) 

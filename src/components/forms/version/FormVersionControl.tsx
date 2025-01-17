@@ -1,187 +1,97 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useToast } from "@/components/ui/use-toast"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { FormTemplate } from "@prisma/client"
-
-interface Version {
-  id: string
-  version: number
-  templateId: string
-  schema: any
-  layout?: any
-  style?: any
-  metadata?: any
-  isActive: boolean
-  createdAt: Date
-  createdById: string
-  changelog?: string
-}
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+import { FormVersionHistory } from "./FormVersionHistory"
+import { FormVersionDiff } from "./FormVersionDiff"
+import { FormVersionCreate } from "./FormVersionCreate"
+import { FormVersionService } from "@/services/form-version-service"
+import { FormVersionData } from "@/types/forms"
 
 interface FormVersionControlProps {
   templateId: string
-  onVersionChange?: (version: Version) => void
+  currentVersion: FormVersionData
+}
+
+interface VersionDiff {
+  added: string[]
+  removed: string[]
+  modified: string[]
 }
 
 /**
- * Form version control component for managing form template versions
+ * FormVersionControl component for managing form versions
+ * @param {FormVersionControlProps} props - Component props
+ * @returns {JSX.Element} Rendered component
  */
 export function FormVersionControl({
   templateId,
-  onVersionChange,
+  currentVersion,
 }: FormVersionControlProps) {
-  const { toast } = useToast()
-  const [versions, setVersions] = useState<Version[]>([])
-  const [selectedVersion, setSelectedVersion] = useState<string>("")
+  const [versions, setVersions] = useState<FormVersionData[]>([])
+  const [selectedVersion, setSelectedVersion] = useState<FormVersionData | null>(null)
+  const [versionDiff, setVersionDiff] = useState<VersionDiff | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [changelog, setChangelog] = useState("")
 
-  // Fetch versions on mount
-  useEffect(() => {
-    fetchVersions()
-  }, [templateId])
+  const versionService = useMemo(() => new FormVersionService(templateId), [templateId])
 
-  const fetchVersions = async () => {
-    try {
-      const response = await fetch(`/api/forms/templates/${templateId}/versions`)
-      if (!response.ok) throw new Error("Failed to fetch versions")
-
-      const data = await response.json()
-      setVersions(data)
-
-      // Select the current version by default
-      const template = await fetch(`/api/forms/templates/${templateId}`).then(res => res.json())
-      if (template?.currentVersion) {
-        const currentVersion = data.find((v: Version) => v.version === template.currentVersion)
-        if (currentVersion) {
-          setSelectedVersion(currentVersion.id)
-          onVersionChange?.(currentVersion)
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching versions:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch form versions",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleVersionChange = (versionId: string) => {
-    const version = versions.find((v) => v.id === versionId)
-    if (version) {
-      setSelectedVersion(versionId)
-      onVersionChange?.(version)
-    }
-  }
-
-  const handleCreateVersion = async () => {
+  const fetchVersions = useCallback(async () => {
     try {
       setIsLoading(true)
-
-      const response = await fetch(`/api/forms/templates/${templateId}/versions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changelog }),
-      })
-
-      if (!response.ok) throw new Error("Failed to create version")
-
-      const newVersion = await response.json()
-      setVersions((prev) => [...prev, newVersion])
-      setSelectedVersion(newVersion.id)
-      onVersionChange?.(newVersion)
-      setChangelog("")
-      setIsDialogOpen(false)
-
-      toast({
-        title: "Success",
-        description: "New version created successfully",
-      })
-    } catch (error) {
-      console.error("Error creating version:", error)
-      toast({
-        title: "Error",
-        description: "Failed to create new version",
-        variant: "destructive",
-      })
+      const data = await versionService.getVersions()
+      setVersions(data)
+    } catch {
+      toast.error("Failed to fetch versions")
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [versionService])
+
+  const compareVersions = useCallback(async (version: FormVersionData) => {
+    try {
+      setIsLoading(true)
+      const diff = await versionService.compareVersions(version.id, currentVersion.id)
+      setVersionDiff(diff)
+      setSelectedVersion(version)
+    } catch {
+      toast.error("Failed to compare versions")
+      setVersionDiff(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [currentVersion.id, versionService])
+
+  const createVersion = useCallback(async (notes: string) => {
+    try {
+      setIsLoading(true)
+      await versionService.createVersion(notes)
+      await fetchVersions()
+      setVersionDiff(null)
+      toast.success("Version created successfully")
+    } catch {
+      toast.error("Failed to create version")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [fetchVersions, versionService])
+
+  useEffect(() => {
+    fetchVersions()
+  }, [fetchVersions])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <Label>Version</Label>
-          <Select value={selectedVersion} onValueChange={handleVersionChange}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select version" />
-            </SelectTrigger>
-            <SelectContent>
-              {versions.map((version) => (
-                <SelectItem key={version.id} value={version.id}>
-                  v{version.version} ({new Date(version.createdAt).toLocaleDateString()})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>Create New Version</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Version</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="changelog">Changelog</Label>
-                <Textarea
-                  id="changelog"
-                  value={changelog}
-                  onChange={(e) => setChangelog(e.target.value)}
-                  placeholder="Describe the changes in this version..."
-                />
-              </div>
-              <Button
-                onClick={handleCreateVersion}
-                disabled={isLoading || !changelog.trim()}
-              >
-                {isLoading ? "Creating..." : "Create"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <FormVersionHistory
+          versions={versions}
+          selectedVersion={selectedVersion}
+          onVersionSelect={compareVersions}
+          isLoading={isLoading}
+        />
+        <FormVersionCreate onSubmit={createVersion} isLoading={isLoading} />
       </div>
-
-      {selectedVersion && (
-        <div className="text-sm text-gray-500">
-          {versions.find((v) => v.id === selectedVersion)?.changelog}
-        </div>
+      {versionDiff && selectedVersion && (
+        <FormVersionDiff version={selectedVersion} diff={versionDiff} />
       )}
     </div>
   )

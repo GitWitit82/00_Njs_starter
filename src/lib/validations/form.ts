@@ -1,56 +1,59 @@
 import { z } from "zod"
+import { FormType, FormPriority } from "@prisma/client"
 
-const formItemLayoutSchema = z.object({
-  width: z.enum(["full", "half", "third"]),
-  row: z.number()
+export const formFieldLayoutSchema = z.object({
+  width: z.number().min(1).max(12).optional(),
+  rows: z.number().min(1).optional(),
 })
 
-/**
- * Form item schema for both form fields and checklist items
- */
-export const formItemSchema = z.object({
+export const formFieldSchema = z.object({
   id: z.string(),
-  content: z.string(),
-  type: z.enum(["TEXT", "TEXTAREA", "SELECT", "CHECKBOX", "RADIO", "CHECKLIST"]),
-  required: z.boolean().optional(),
+  type: z.enum([
+    "TEXT",
+    "TEXTAREA",
+    "SELECT",
+    "MULTISELECT",
+    "RADIO",
+    "CHECKBOX",
+    "NUMBER",
+    "DATE",
+  ]),
+  label: z.string().min(1),
+  required: z.boolean(),
   options: z.array(z.string()).optional(),
-  size: z.enum(["small", "normal", "large"]).optional(),
-  layout: formItemLayoutSchema
+  content: z.string().optional(),
+  layout: formFieldLayoutSchema.optional(),
 })
 
-/**
- * Form section schema
- */
 export const formSectionSchema = z.object({
   id: z.string(),
-  title: z.string(),
+  title: z.string().min(1),
   description: z.string().optional(),
-  items: z.array(formItemSchema)
+  items: z.array(formFieldSchema),
 })
 
-export const formSchemaSchema = z.object({
-  sections: z.array(formSectionSchema),
-})
-
-/**
- * Form template schema
- */
 export const formTemplateSchema = z.object({
   id: z.string(),
-  name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  departmentId: z.string().optional(),
-  workflowId: z.string().optional(),
-  phaseId: z.string().optional(),
-  sections: z.array(formSectionSchema),
-  isActive: z.boolean(),
-  userId: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  name: z.string().min(1),
+  type: z.nativeEnum(FormType),
+  priority: z.nativeEnum(FormPriority),
+  description: z.string().optional().nullable(),
+  schema: z.record(z.any()),
+  layout: z.record(z.any()).optional().nullable(),
+  style: z.record(z.any()).optional().nullable(),
+  metadata: z.record(z.any()).optional().nullable(),
+  order: z.number().optional().default(0),
+  isActive: z.boolean().optional().default(true),
+  departmentId: z.string().optional().nullable(),
+  workflowId: z.string(),
+  phaseId: z.string(),
+  currentVersion: z.number().optional().default(1),
+  validationRules: z.record(z.any()).optional().nullable(),
+  defaultValues: z.record(z.any()).optional().nullable(),
 })
 
-export type FormItem = z.infer<typeof formItemSchema>
+export type FormFieldLayout = z.infer<typeof formFieldLayoutSchema>
+export type FormField = z.infer<typeof formFieldSchema>
 export type FormSection = z.infer<typeof formSectionSchema>
-export type FormSchema = z.infer<typeof formSchemaSchema>
 export type FormTemplate = z.infer<typeof formTemplateSchema>
-export type FormItemLayout = z.infer<typeof formItemLayoutSchema> 
+export type FormSchemaInput = Omit<FormTemplate, "id"> 

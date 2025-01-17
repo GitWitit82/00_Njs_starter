@@ -1,62 +1,56 @@
-import { Department, FormTemplate, FormInstance, Workflow, Phase, Project } from "@prisma/client"
+import { FormInstance, FormTemplate, FormVersion, User } from "@prisma/client"
 
-/**
- * Form template with department information
- */
-export interface FormTemplateWithDepartment extends FormTemplate {
-  department: Pick<Department, "id" | "name" | "color"> | null
+export interface FormSchema {
+  sections: FormSection[]
+  metadata?: Record<string, unknown>
 }
 
-/**
- * Form template with all relations
- */
-export interface FormTemplateWithRelations extends FormTemplate {
-  department: Department | null
-  workflow: Workflow | null
-  phase: Phase | null
-  instances: FormInstance[]
+export interface FormSection {
+  id: string
+  title: string
+  description?: string
+  fields: FormField[]
 }
 
-/**
- * Form instance with all relations
- */
-export interface FormInstanceWithRelations extends FormInstance {
-  template: FormTemplate & {
-    department: Department | null
-    workflow: Workflow | null
-    phase: Phase | null
+export interface FormField {
+  id: string
+  type: string
+  label: string
+  required?: boolean
+  placeholder?: string
+  defaultValue?: unknown
+  options?: string[]
+  validation?: {
+    pattern?: string
+    min?: number
+    max?: number
+    minLength?: number
+    maxLength?: number
   }
-  project: Project | null
-  responses: Array<{
-    id: string
-    createdAt: Date
-    data: Record<string, any>
-  }>
 }
 
-/**
- * Form status update request
- */
-export interface FormStatusUpdateRequest {
-  status: string
-  comment?: string
-  metadata?: Record<string, any>
+export interface FormTemplateWithRelations extends FormTemplate {
+  creator: User
+  versions: FormVersion[]
 }
 
-/**
- * Form completion check result
- */
-export interface FormCompletionCheckResult {
-  canComplete: boolean
-  missingRequirements?: string[]
-  blockedBy?: string[]
+export interface FormVersionWithUser extends FormVersion {
+  createdBy: User
 }
 
-/**
- * Form status metadata
- */
-export interface FormStatusMetadata {
-  changedBy: string
-  reason?: string
-  dependencies?: string[]
+export interface FormInstanceWithRelations extends FormInstance {
+  template: FormTemplate
+  version: FormVersion
+  assignee: User | null
+}
+
+export interface FormValidationError {
+  field: string
+  message: string
+  section?: string
+}
+
+export interface FormValidationResult {
+  isValid: boolean
+  errors: FormValidationError[]
 } 

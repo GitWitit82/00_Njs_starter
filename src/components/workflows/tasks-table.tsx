@@ -7,11 +7,16 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Department, Task } from "@prisma/client"
-import { Plus, Pencil } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
+import { Priority } from "@prisma/client"
+import { Plus, MoreHorizontal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Table,
   TableBody,
@@ -21,18 +26,36 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { TaskModal } from "./task-modal"
-
-interface TaskWithDepartment extends Task {
-  department: Department | null
-}
+import { WorkflowTaskWithDepartment } from "@/types/workflows"
 
 interface TasksTableProps {
   workflowId: string
   phaseId: string
-  tasks: TaskWithDepartment[]
+  tasks: WorkflowTaskWithDepartment[]
   isLoading?: boolean
 }
 
+/**
+ * Gets the priority color class based on priority level
+ */
+function getPriorityColor(priority: Priority): string {
+  switch (priority) {
+    case Priority.LOW:
+      return "text-green-500"
+    case Priority.MEDIUM:
+      return "text-yellow-500"
+    case Priority.HIGH:
+      return "text-orange-500"
+    case Priority.URGENT:
+      return "text-red-500"
+    default:
+      return "text-muted-foreground"
+  }
+}
+
+/**
+ * TasksTable component for displaying workflow tasks
+ */
 export function TasksTable({
   workflowId,
   phaseId,
@@ -42,22 +65,45 @@ export function TasksTable({
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<TaskWithDepartment | undefined>(undefined)
+  const [selectedTask, setSelectedTask] = useState<WorkflowTaskWithDepartment | undefined>(undefined)
 
-  const handleTaskSuccess = () => {
-    setModalOpen(false)
-    setSelectedTask(undefined)
-    router.refresh()
-  }
-
-  const handleEditClick = (task: TaskWithDepartment) => {
+  /**
+   * Handles editing a task
+   */
+  const handleEditClick = (task: WorkflowTaskWithDepartment) => {
     setSelectedTask(task)
     setModalOpen(true)
   }
 
+  /**
+   * Handles creating a new task
+   */
   const handleNewTask = () => {
     setSelectedTask(undefined)
     setModalOpen(true)
+  }
+
+  /**
+   * Handles deleting a task
+   */
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      const response = await fetch(
+        `/api/workflows/${workflowId}/phases/${phaseId}/tasks/${taskId}`,
+        {
+          method: "DELETE",
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to delete task")
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error("Error deleting task:", error)
+      setError("Failed to delete task. Please try again.")
+    }
   }
 
   if (isLoading) {
@@ -85,16 +131,15 @@ export function TasksTable({
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Priority</TableHead>
+            <TableHead>Hours</TableHead>
             <TableHead>Department</TableHead>
-            <TableHead>Man Hours</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead className="w-[100px]">Actions</TableHead>
+            <TableHead className="w-[70px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {tasks.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center">
+              <TableCell colSpan={6} className="h-24 text-center">
                 No tasks found. Click the button above to create one.
               </TableCell>
             </TableRow>
@@ -102,25 +147,34 @@ export function TasksTable({
             tasks.map((task) => (
               <TableRow key={task.id}>
                 <TableCell className="font-medium">{task.name}</TableCell>
-                <TableCell>{task.description}</TableCell>
-                <TableCell>{task.priority}</TableCell>
-                <TableCell>{task.department?.name || "Unassigned"}</TableCell>
-                <TableCell>{task.manHours}h</TableCell>
+                <TableCell>{task.description || "—"}</TableCell>
                 <TableCell>
-                  {formatDistanceToNow(new Date(task.createdAt), {
-                    addSuffix: true,
-                  })}
+                  <span className={getPriorityColor(task.priority)}>
+                    {task.priority.toLowerCase()}
+                  </span>
                 </TableCell>
+                <TableCell>{task.manHours || "—"}</TableCell>
+                <TableCell>{task.department?.name || "—"}</TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditClick(task)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <span className="sr-only">Edit task</span>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Open menu</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditClick(task)}>
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-destructive"
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))
@@ -132,8 +186,7 @@ export function TasksTable({
         workflowId={workflowId}
         phaseId={phaseId}
         open={modalOpen}
-        onOpenChange={setModalOpen}
-        onSuccess={handleTaskSuccess}
+        onClose={() => setModalOpen(false)}
         task={selectedTask}
       />
     </div>

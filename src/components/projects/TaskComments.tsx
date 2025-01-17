@@ -7,85 +7,47 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Send } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-interface User {
-  id: string;
-  name: string | null;
-}
-
-interface TaskActivity {
-  id: string;
-  type: string;
-  content: string;
-  createdAt: string;
-  user: User;
-}
+import { ActivityType } from "@/lib/services/task-scheduling.service";
+import { format } from "date-fns";
+import { toast } from "sonner";
 
 interface TaskCommentsProps {
   taskId: string;
-  projectId: string;
-  activity: TaskActivity[];
+  activities: Array<{
+    id: string;
+    type: string;
+    content: string;
+    details: string;
+    createdAt: Date;
+    user: {
+      id: string;
+      name: string | null;
+    };
+  }>;
 }
 
-/**
- * Gets the activity icon based on activity type
- */
-function getActivityIcon(type: string) {
-  switch (type) {
-    case "COMMENT":
-      return <MessageSquare className="h-4 w-4" />;
-    default:
-      return null;
-  }
-}
-
-/**
- * Gets the activity message based on activity type and content
- */
-function getActivityMessage(type: string, content: string) {
-  switch (type) {
-    case "COMMENT":
-      return content;
-    case "STATUS_CHANGE":
-      return `Changed status to ${content.toLowerCase()}`;
-    case "ASSIGNMENT":
-      return content ? `Assigned to ${content}` : "Removed assignment";
-    default:
-      return content;
-  }
-}
-
-/**
- * Task comments and activity component
- */
-export function TaskComments({ taskId, projectId, activity }: TaskCommentsProps) {
+export function TaskComments({ taskId, activities }: TaskCommentsProps) {
+  const router = useRouter();
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
-  const { toast } = useToast();
 
-  /**
-   * Handles comment submission
-   */
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!comment.trim()) return;
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, {
-        method: "PATCH",
+      const response = await fetch(`/api/tasks/${taskId}/comments`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ comment: comment.trim() }),
+        body: JSON.stringify({
+          content: comment,
+          type: ActivityType.STATUS_CHANGE,
+        }),
       });
 
       if (!response.ok) {
@@ -93,18 +55,11 @@ export function TaskComments({ taskId, projectId, activity }: TaskCommentsProps)
       }
 
       setComment("");
-      toast({
-        title: "Comment added",
-        description: "Your comment has been added to the task.",
-      });
-
       router.refresh();
+      toast.success("Comment added successfully");
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add comment. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Error adding comment:", error);
+      toast.error("Failed to add comment");
     } finally {
       setIsSubmitting(false);
     }
@@ -112,51 +67,30 @@ export function TaskComments({ taskId, projectId, activity }: TaskCommentsProps)
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start space-x-4">
+      <form onSubmit={handleSubmit} className="space-y-2">
         <Textarea
+          placeholder="Add a comment..."
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Add a comment..."
-          className="flex-1"
+          className="min-h-[100px]"
         />
-        <Button
-          onClick={handleSubmit}
-          disabled={!comment.trim() || isSubmitting}
-          size="icon"
-        >
-          <Send className="h-4 w-4" />
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Adding..." : "Add Comment"}
         </Button>
-      </div>
+      </form>
 
-      <ScrollArea className="h-[300px] pr-4">
-        <div className="space-y-4">
-          {activity.map((item) => (
-            <div key={item.id} className="flex items-start space-x-4">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback>
-                  {item.user.name?.[0]?.toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="font-medium">{item.user.name}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(item.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  {getActivityIcon(item.type)}
-                  <p className="text-sm">
-                    {getActivityMessage(item.type, item.content)}
-                  </p>
-                </div>
-              </div>
+      <div className="space-y-4">
+        {activities.map((activity) => (
+          <div key={activity.id} className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>{activity.user.name || "Unknown User"}</span>
+              <span>•</span>
+              <span>{format(new Date(activity.createdAt), "MMM d, yyyy")}</span>
             </div>
-          ))}
-        </div>
-      </ScrollArea>
+            <p className="text-sm">{activity.content}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 } 

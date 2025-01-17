@@ -1,10 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Role } from "@prisma/client"
-import { formatDistanceToNow } from "date-fns"
-import { Edit, Trash } from "lucide-react"
-
+import { User, Role } from "@prisma/client"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -13,144 +10,85 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { UserModal } from "@/components/users/user-modal"
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: Role
-  createdAt: Date
-}
+import { Badge } from "@/components/ui/badge"
 
 interface UsersTableProps {
   users: User[]
-  onUserChange: () => void
+  onEdit: (user: User) => void
+  onDelete: (userId: string) => void
 }
 
-export function UsersTable({ users, onUserChange }: UsersTableProps) {
-  const [selectedUser, setSelectedUser] = useState<User | undefined>()
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "delete">("create")
-  const [modalOpen, setModalOpen] = useState(false)
+type RoleBadgeVariant = {
+  [K in Role]: "default" | "secondary" | "destructive" | "outline"
+}
 
-  const handleCreateUser = async (values: any) => {
-    const response = await fetch("/api/users", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(values),
+const ROLE_BADGE_VARIANTS: RoleBadgeVariant = {
+  ADMIN: "destructive",
+  MANAGER: "secondary",
+  USER: "default",
+}
+
+/**
+ * UsersTable component for displaying user data in a table format
+ * @param {UsersTableProps} props - Component props
+ * @returns {JSX.Element} Rendered component
+ */
+export function UsersTable({ users, onEdit, onDelete }: UsersTableProps) {
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message)
-    }
-
-    onUserChange()
-  }
-
-  const handleUpdateUser = async (values: any) => {
-    if (!selectedUser) return
-
-    const response = await fetch(`/api/users/${selectedUser.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(values),
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message)
-    }
-
-    onUserChange()
-  }
-
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return
-
-    const response = await fetch(`/api/users/${selectedUser.id}`, {
-      method: "DELETE",
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message)
-    }
-
-    onUserChange()
-  }
-
-  const openModal = (mode: "create" | "edit" | "delete", user?: User) => {
-    setModalMode(mode)
-    setSelectedUser(user)
-    setModalOpen(true)
   }
 
   return (
-    <div>
-      <div className="mb-4">
-        <Button onClick={() => openModal("create")}>Create User</Button>
-      </div>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {users.map((user) => (
+            <TableRow key={user.id}>
+              <TableCell>{user.name}</TableCell>
+              <TableCell>{user.email}</TableCell>
+              <TableCell>
+                <Badge variant={ROLE_BADGE_VARIANTS[user.role]}>
+                  {user.role}
+                </Badge>
+              </TableCell>
+              <TableCell>{formatDate(user.createdAt)}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(user)}
+                    aria-label={`Edit ${user.name}`}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => onDelete(user.id)}
+                    aria-label={`Delete ${user.name}`}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.name}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{user.role}</TableCell>
-                <TableCell>
-                  {formatDistanceToNow(new Date(user.createdAt), {
-                    addSuffix: true,
-                  })}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openModal("edit", user)}
-                  >
-                    <Edit className="h-4 w-4" />
-                    <span className="sr-only">Edit</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openModal("delete", user)}
-                  >
-                    <Trash className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <UserModal
-        mode={modalMode}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        user={selectedUser}
-        onSubmit={modalMode === "create" ? handleCreateUser : handleUpdateUser}
-        onDelete={handleDeleteUser}
-      />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 } 

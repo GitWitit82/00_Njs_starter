@@ -19,38 +19,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { TaskWithRelations } from "@/types/tasks";
+import { getStatusVariant } from "@/lib/utils/ui";
 
 interface TasksTableProps {
   projectId: string;
-  tasks: {
-    id: string;
-    name: string;
-    description: string | null;
-    status: string;
-    assignedTo: {
-      id: string;
-      name: string | null;
-    } | null;
-    createdAt: string;
-  }[];
-}
-
-/**
- * Gets the appropriate badge variant based on task status
- */
-function getStatusVariant(status: string) {
-  switch (status) {
-    case "NOT_STARTED":
-      return "secondary";
-    case "IN_PROGRESS":
-      return "default";
-    case "ON_HOLD":
-      return "warning";
-    case "COMPLETED":
-      return "success";
-    default:
-      return "secondary";
-  }
+  tasks: TaskWithRelations[];
 }
 
 /**

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/db"
 import { getServerSession } from "next-auth"
 import { z } from "zod"
 
@@ -21,7 +21,7 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const phases = await db.projectPhase.findMany({
+    const phases = await prisma.projectPhase.findMany({
       where: { projectId: params.projectId },
       orderBy: { order: "asc" },
       include: {
@@ -59,7 +59,7 @@ export async function POST(
       return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const project = await db.project.findUnique({
+    const project = await prisma.project.findUnique({
       where: { id: params.projectId },
       select: { managerId: true },
     })
@@ -81,7 +81,7 @@ export async function POST(
 
     // If order is provided, shift existing phases
     if (body.order !== undefined) {
-      await db.projectPhase.updateMany({
+      await prisma.projectPhase.updateMany({
         where: {
           projectId: params.projectId,
           order: {
@@ -96,7 +96,7 @@ export async function POST(
       })
     }
 
-    const phase = await db.projectPhase.create({
+    const phase = await prisma.projectPhase.create({
       data: {
         name: body.name,
         description: body.description,
