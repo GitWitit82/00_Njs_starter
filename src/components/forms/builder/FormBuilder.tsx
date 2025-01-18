@@ -60,37 +60,39 @@ export function FormBuilder({
   return (
     <div className="flex h-full flex-col space-y-4">
       <div className="flex items-center justify-between">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <Button
-          onClick={handleSave}
-          disabled={isLoading}
-          aria-label="Save form template"
-        >
-          {isLoading ? "Saving..." : "Save"}
-        </Button>
-      </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+          <div className="flex items-center justify-between mb-4">
+            <TabsList>
+              <TabsTrigger value="editor">Editor</TabsTrigger>
+              <TabsTrigger value="preview">Preview</TabsTrigger>
+            </TabsList>
+            <Button
+              onClick={handleSave}
+              disabled={isLoading}
+              aria-label="Save form template"
+            >
+              {isLoading ? "Saving..." : "Save"}
+            </Button>
+          </div>
 
-      <div className="flex-1">
-        <TabsContent value="editor" className="h-full">
-          <FormSections
-            sections={formData.sections}
-            onChange={(sections) =>
-              setFormData((prev) => ({ ...prev, sections }))
-            }
-            disabled={isLoading}
-          />
-        </TabsContent>
-        <TabsContent value="preview" className="h-full">
-          <FormPreview
-            sections={formData.sections}
-            metadata={formData.metadata}
-          />
-        </TabsContent>
+          <div className="flex-1">
+            <TabsContent value="editor" className="h-full">
+              <FormSections
+                sections={formData.sections}
+                onChange={(sections) =>
+                  setFormData((prev) => ({ ...prev, sections }))
+                }
+                disabled={isLoading}
+              />
+            </TabsContent>
+            <TabsContent value="preview" className="h-full">
+              <FormPreview
+                sections={formData.sections}
+                metadata={formData.metadata}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
     </div>
   )

@@ -1,73 +1,116 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
 
-export async function GET(
-  request: Request,
-  { params }: { params: { instanceId: string; id: string } }
-) {
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const response = await db.formResponse.findUnique({
-      where: {
-        id: params.id,
-        instanceId: params.instanceId
-      },
+    const paths = request.url.split("/")
+    const instanceId = paths[paths.indexOf("instances") + 1]
+
+    const formInstance = await prisma.formInstance.findUnique({
+      where: { id: instanceId },
       include: {
-        instance: {
+        responses: {
           include: {
-            template: true
-          }
-        }
-      }
+            submittedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            reviewedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
     })
 
-    if (!response) {
-      return new NextResponse('Response not found', { status: 404 })
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(formInstance.responses)
   } catch (error) {
-    console.error('Error fetching form response:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    console.error("[FORM_RESPONSES_GET]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { instanceId: string; id: string } }
-) {
-  try {
-    const { data } = await request.json()
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const response = await db.formResponse.update({
-      where: {
-        id: params.id,
-        instanceId: params.instanceId
+  try {
+    const paths = request.url.split("/")
+    const instanceId = paths[paths.indexOf("instances") + 1]
+    const { data, metadata } = await request.json()
+
+    const [user, formInstance] = await Promise.all([
+      prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      }),
+      prisma.formInstance.findUnique({
+        where: { id: instanceId },
+        select: { id: true },
+      }),
+    ])
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
+    }
+
+    const response = await prisma.formResponse.create({
+      data: {
+        instanceId,
+        data,
+        metadata,
+        submittedById: user.id,
       },
-      data: { data }
+      include: {
+        submittedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     })
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('Error updating form response:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
-  }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: { instanceId: string; id: string } }
-) {
-  try {
-    await db.formResponse.delete({
-      where: {
-        id: params.id,
-        instanceId: params.instanceId
-      }
-    })
-
-    return new NextResponse(null, { status: 204 })
-  } catch (error) {
-    console.error('Error deleting form response:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    console.error("[FORM_RESPONSES_POST]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

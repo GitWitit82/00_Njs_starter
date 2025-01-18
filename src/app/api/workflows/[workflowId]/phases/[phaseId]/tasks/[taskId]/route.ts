@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { TaskStatus, Priority } from "@prisma/client"
 
@@ -20,21 +20,22 @@ interface ReorderTask {
   order: number;
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { workflowId: string; phaseId: string; taskId: string } }
-) {
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const paths = request.url.split("/")
+    const phaseId = paths[paths.indexOf("phases") + 1]
+    const taskId = paths[paths.indexOf("tasks") + 1]
 
     const json = await request.json()
     const remainingTasks = await prisma.workflowTask.findMany({
       where: {
-        phaseId: params.phaseId,
-        id: { not: params.taskId },
+        phaseId: phaseId,
+        id: { not: taskId },
       },
       orderBy: { order: "asc" },
     })
@@ -54,7 +55,7 @@ export async function PATCH(
     }
 
     const task = await prisma.workflowTask.update({
-      where: { id: params.taskId },
+      where: { id: taskId },
       data: json as TaskUpdateData,
       include: {
         department: true,
@@ -72,6 +73,9 @@ export async function PATCH(
     return NextResponse.json(task)
   } catch (error) {
     console.error("[WORKFLOW_TASK_PATCH]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

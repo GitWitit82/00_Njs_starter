@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { z } from "zod"
-import { Prisma } from "@prisma/client"
-import { prisma } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { z } from "zod"
 
 const versionSchema = z.object({
   name: z.string().min(1, "Version name is required"),
@@ -16,20 +15,21 @@ const versionSchema = z.object({
   isCurrent: z.boolean().default(false)
 })
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string; versionId: string } }
-) {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
+    const paths = request.url.split("/")
+    const templateId = paths[paths.indexOf("templates") + 1]
+    const versionId = paths[paths.indexOf("versions") + 1]
+
     const version = await prisma.formTemplateVersion.findUnique({
       where: {
-        id: params.versionId,
-        templateId: params.id
+        id: versionId,
+        templateId: templateId
       },
       include: {
         template: {
@@ -64,33 +64,22 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string; versionId: string } }
-) {
+export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
-    const validatedBody = versionSchema.partial().parse(await request.json())
+    const paths = request.url.split("/")
+    const templateId = paths[paths.indexOf("templates") + 1]
+    const versionId = paths[paths.indexOf("versions") + 1]
+    const data = versionSchema.parse(await request.json())
 
     const version = await prisma.formTemplateVersion.findUnique({
       where: {
-        id: params.versionId,
-        templateId: params.id
-      },
-      include: {
-        template: {
-          include: {
-            versions: {
-              where: {
-                isCurrent: true
-              }
-            }
-          }
-        }
+        id: versionId,
+        templateId: templateId
       }
     })
 
@@ -101,49 +90,9 @@ export async function PATCH(
       )
     }
 
-    // If setting this version as current, check if there are any form instances using the current version
-    if (validatedBody.isCurrent && version.template.versions[0]?.id !== version.id) {
-      const instanceCount = await prisma.formInstance.count({
-        where: {
-          templateId: params.id,
-          versionId: version.template.versions[0]?.id
-        }
-      })
-
-      if (instanceCount > 0) {
-        return NextResponse.json(
-          { error: "Cannot change current version while form instances exist" },
-          { status: 400 }
-        )
-      }
-
-      await prisma.formTemplateVersion.updateMany({
-        where: {
-          templateId: params.id,
-          id: {
-            not: params.versionId
-          }
-        },
-        data: {
-          isCurrent: false
-        }
-      })
-    }
-
     const updatedVersion = await prisma.formTemplateVersion.update({
-      where: {
-        id: params.versionId
-      },
-      data: {
-        name: validatedBody.name,
-        description: validatedBody.description,
-        schema: validatedBody.schema as Prisma.JsonObject | undefined,
-        layout: validatedBody.layout as Prisma.JsonObject | undefined,
-        style: validatedBody.style as Prisma.JsonObject | undefined,
-        defaultValues: validatedBody.defaultValues as Prisma.JsonObject | undefined,
-        metadata: validatedBody.metadata as Prisma.JsonObject,
-        isCurrent: validatedBody.isCurrent
-      },
+      where: { id: versionId },
+      data,
       include: {
         template: {
           select: {
@@ -165,7 +114,7 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Invalid request data", details: error.errors },
-        { status: 422 }
+        { status: 400 }
       )
     }
     console.error("[FORM_VERSION_PATCH]", error)
@@ -176,31 +125,21 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string; versionId: string } }
-) {
+export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {
+    const paths = request.url.split("/")
+    const templateId = paths[paths.indexOf("templates") + 1]
+    const versionId = paths[paths.indexOf("versions") + 1]
+
     const version = await prisma.formTemplateVersion.findUnique({
       where: {
-        id: params.versionId,
-        templateId: params.id
-      },
-      include: {
-        template: {
-          include: {
-            versions: {
-              where: {
-                isCurrent: true
-              }
-            }
-          }
-        }
+        id: versionId,
+        templateId: templateId
       }
     })
 
@@ -211,36 +150,11 @@ export async function DELETE(
       )
     }
 
-    // Don't allow deleting the current version
-    if (version.isCurrent) {
-      return NextResponse.json(
-        { error: "Cannot delete the current version" },
-        { status: 400 }
-      )
-    }
-
-    // Check if there are any form instances using this version
-    const instanceCount = await prisma.formInstance.count({
-      where: {
-        templateId: params.id,
-        versionId: params.versionId
-      }
-    })
-
-    if (instanceCount > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete version with existing form instances" },
-        { status: 400 }
-      )
-    }
-
     await prisma.formTemplateVersion.delete({
-      where: {
-        id: params.versionId
-      }
+      where: { id: versionId }
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "Version deleted successfully" })
   } catch (error) {
     console.error("[FORM_VERSION_DELETE]", error)
     return NextResponse.json(

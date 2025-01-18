@@ -1,186 +1,209 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { z } from "zod"
-
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 
-const projectUpdateSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  status: z.enum(["PLANNING", "IN_PROGRESS", "ON_HOLD", "COMPLETED", "CANCELLED"]),
-  managerId: z.string(),
-})
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string } }
-) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
 
-    const project = await db.project.findUnique({
-      where: { id: params.projectId },
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
       include: {
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        phases: {
-          orderBy: { order: "asc" },
+        tasks: {
           include: {
-            tasks: {
-              orderBy: { order: "asc" },
-              include: {
-                department: true,
-                assignedTo: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true,
-                  },
-                },
-              },
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
             },
-          },
+            phase: true,
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-      },
+        phases: true,
+        formTemplates: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json(project)
   } catch (error) {
     console.error("[PROJECT_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { projectId: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const project = await db.project.findUnique({
-      where: { id: params.projectId },
-      select: { managerId: true },
+  try {
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const { name, description, type, status, metadata } = await request.json()
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId }
     })
 
     if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404 }
+      )
     }
 
-    // Only allow manager or admin to update project
-    if (
-      project.managerId !== session.user.id &&
-      session.user.role !== "ADMIN"
-    ) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const json = await request.json()
-    const body = projectUpdateSchema.parse(json)
-
-    const updatedProject = await db.project.update({
-      where: { id: params.projectId },
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
       data: {
-        name: body.name,
-        description: body.description,
-        status: body.status,
-        managerId: body.managerId,
+        name,
+        description,
+        type,
+        status,
+        metadata
       },
       include: {
-        manager: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        phases: {
-          orderBy: { order: "asc" },
+        tasks: {
           include: {
-            tasks: {
-              orderBy: { order: "asc" },
-              include: {
-                department: true,
-                assignedTo: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    image: true,
-                  },
-                },
-              },
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
             },
-          },
+            phase: true,
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-      },
+        phases: true,
+        formTemplates: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
 
     return NextResponse.json(updatedProject)
   } catch (error) {
-    console.error("[PROJECT_PUT]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[PROJECT_PATCH]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { projectId: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-    const project = await db.project.findUnique({
-      where: { id: params.projectId },
-      select: { managerId: true },
+  try {
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId }
     })
 
     if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404 }
+      )
     }
 
-    // Only allow manager or admin to delete project
-    if (
-      project.managerId !== session.user.id &&
-      session.user.role !== "ADMIN"
-    ) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    await db.project.delete({
-      where: { id: params.projectId },
+    await prisma.project.delete({
+      where: { id: projectId }
     })
 
-    return new NextResponse(null, { status: 204 })
+    return NextResponse.json({ message: "Project deleted successfully" })
   } catch (error) {
     console.error("[PROJECT_DELETE]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

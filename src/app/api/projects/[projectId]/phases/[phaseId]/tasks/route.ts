@@ -1,170 +1,156 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
 import { getServerSession } from "next-auth"
-import { z } from "zod"
-
+import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 
-const taskSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
-  manHours: z.number().min(0.25, "Minimum 0.25 hours required"),
-  order: z.number().int().min(0),
-  departmentId: z.string().optional(),
-  assignedToId: z.string().optional(),
-  scheduledStart: z.string().optional().transform((str) => str ? new Date(str) : null),
-  scheduledEnd: z.string().optional().transform((str) => str ? new Date(str) : null),
-})
-
-export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string; phaseId: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const tasks = await db.projectTask.findMany({
-      where: { projectPhaseId: params.phaseId },
-      orderBy: { order: "asc" },
-      include: {
-        department: true,
-        assignedTo: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-      },
-    })
-
-    return NextResponse.json(tasks)
-  } catch (error) {
-    console.error("[PROJECT_PHASE_TASKS_GET]", error)
-    return new NextResponse("Internal error", { status: 500 })
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-}
 
-export async function POST(
-  request: Request,
-  { params }: { params: { projectId: string; phaseId: string } }
-) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const phaseId = paths[paths.indexOf("phases") + 1]
 
-    const project = await db.project.findUnique({
-      where: { id: params.projectId },
-      select: { managerId: true },
-    })
-
-    if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
-    }
-
-    // Only allow manager or admin to create tasks
-    if (
-      project.managerId !== session.user.id &&
-      session.user.role !== "ADMIN"
-    ) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const json = await request.json()
-    const body = taskSchema.parse(json)
-
-    // Check if phase exists
-    const phase = await db.projectPhase.findFirst({
+    const phase = await prisma.projectPhase.findUnique({
       where: {
-        id: params.phaseId,
-        projectId: params.projectId,
+        id: phaseId,
+        projectId: projectId
       },
+      include: {
+        tasks: {
+          include: {
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Phase not found" },
+        { status: 404 }
+      )
     }
 
-    // Check if department exists if provided
-    if (body.departmentId) {
-      const department = await db.department.findUnique({
-        where: { id: body.departmentId },
-      })
+    return NextResponse.json(phase.tasks)
+  } catch (error) {
+    console.error("[TASKS_GET]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
+  }
+}
 
-      if (!department) {
-        return new NextResponse("Department not found", { status: 404 })
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const phaseId = paths[paths.indexOf("phases") + 1]
+    const { name, description, order, status, assignedToId } = await request.json()
+
+    const phase = await prisma.projectPhase.findUnique({
+      where: {
+        id: phaseId,
+        projectId: projectId
       }
+    })
+
+    if (!phase) {
+      return NextResponse.json(
+        { error: "Phase not found" },
+        { status: 404 }
+      )
     }
 
-    // Check if user exists if assigned
-    if (body.assignedToId) {
-      const user = await db.user.findUnique({
-        where: { id: body.assignedToId },
-      })
-
-      if (!user) {
-        return new NextResponse("User not found", { status: 404 })
-      }
-    }
-
-    // If order is provided, shift existing tasks
-    if (body.order !== undefined) {
-      await db.projectTask.updateMany({
-        where: {
-          projectPhaseId: params.phaseId,
-          order: {
-            gte: body.order,
-          },
-        },
-        data: {
-          order: {
-            increment: 1,
-          },
-        },
-      })
-    }
-
-    const task = await db.projectTask.create({
+    const task = await prisma.projectTask.create({
       data: {
-        name: body.name,
-        description: body.description,
-        priority: body.priority,
-        manHours: body.manHours,
-        order: body.order,
-        departmentId: body.departmentId,
-        assignedToId: body.assignedToId,
-        scheduledStart: body.scheduledStart,
-        scheduledEnd: body.scheduledEnd,
-        projectPhaseId: params.phaseId,
+        name,
+        description,
+        order,
+        status,
+        assignedToId,
+        phaseId
       },
       include: {
-        department: true,
         assignedTo: {
           select: {
             id: true,
             name: true,
-            email: true,
-            image: true,
-          },
+            email: true
+          }
         },
-      },
+        formInstances: {
+          include: {
+            template: true,
+            version: true,
+            responses: {
+              include: {
+                submittedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                },
+                reviewedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     })
 
     return NextResponse.json(task)
   } catch (error) {
-    console.error("[PROJECT_PHASE_TASKS_POST]", error)
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify({ error: error.errors[0].message }), {
-        status: 400,
-      })
-    }
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[TASKS_POST]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

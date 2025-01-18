@@ -5,155 +5,198 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { z } from "zod";
-
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
 
-const updateTaskSchema = z.object({
-  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "ON_HOLD", "COMPLETED"]).optional(),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
-});
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-export async function GET(
-  request: Request,
-  { params }: { params: { projectId: string; taskId: string } }
-) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const paths = request.url.split("/");
+    const projectId = paths[paths.indexOf("projects") + 1];
+    const taskId = paths[paths.indexOf("tasks") + 1];
 
     const task = await prisma.projectTask.findFirst({
       where: {
-        id: params.taskId,
-        projectId: params.projectId,
+        id: taskId,
+        phase: {
+          projectId: projectId
+        }
       },
       include: {
-        assignedTo: true,
-        taskActivities: {
-          include: {
-            user: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         },
-      },
+        formInstances: {
+          include: {
+            template: true,
+            version: true,
+            responses: {
+              include: {
+                submittedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                },
+                reviewedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!task) {
-      return new NextResponse("Task not found", { status: 404 });
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(task);
   } catch (error) {
-    console.error("Error fetching task:", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[TASK_GET]", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { projectId: string; taskId: string } }
-) {
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const body = await request.json();
-    const validatedData = updateTaskSchema.parse(body);
-
-    const activityType = validatedData.status ? "STATUS_CHANGE" : "PRIORITY_CHANGE";
-    const activityDetails = validatedData.status
-      ? `Status changed to ${validatedData.status.toLowerCase().replace("_", " ")}`
-      : `Priority changed to ${validatedData.priority?.toLowerCase()}`;
+    const paths = request.url.split("/");
+    const projectId = paths[paths.indexOf("projects") + 1];
+    const taskId = paths[paths.indexOf("tasks") + 1];
+    const { name, description, order, status, assignedToId } = await request.json();
 
     const task = await prisma.projectTask.findFirst({
       where: {
-        id: params.taskId,
-        projectId: params.projectId,
-      },
+        id: taskId,
+        phase: {
+          projectId: projectId
+        }
+      }
     });
 
     if (!task) {
-      return new NextResponse("Task not found", { status: 404 });
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
     }
 
     const updatedTask = await prisma.projectTask.update({
-      where: {
-        id: params.taskId,
-      },
+      where: { id: taskId },
       data: {
-        ...validatedData,
-        taskActivities: {
-          create: {
-            type: activityType,
-            userId: session.user.id,
-            details: activityDetails,
-          },
-        },
+        name,
+        description,
+        order,
+        status,
+        assignedToId
       },
       include: {
-        assignedTo: true,
-        taskActivities: {
-          include: {
-            user: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         },
-      },
+        formInstances: {
+          include: {
+            template: true,
+            version: true,
+            responses: {
+              include: {
+                submittedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                },
+                reviewedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
     return NextResponse.json(updatedTask);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 });
-    }
-
-    console.error("Error updating task:", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[TASK_PATCH]", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { projectId: string; taskId: string } }
-) {
+export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const paths = request.url.split("/");
+    const projectId = paths[paths.indexOf("projects") + 1];
+    const taskId = paths[paths.indexOf("tasks") + 1];
 
     const task = await prisma.projectTask.findFirst({
       where: {
-        id: params.taskId,
-        projectId: params.projectId,
-      },
-      include: {
-        taskActivities: true,
-      },
+        id: taskId,
+        phase: {
+          projectId: projectId
+        }
+      }
     });
 
     if (!task) {
-      return new NextResponse("Task not found", { status: 404 });
+      return NextResponse.json(
+        { error: "Task not found" },
+        { status: 404 }
+      );
     }
 
     await prisma.projectTask.delete({
-      where: {
-        id: params.taskId,
-      },
+      where: { id: taskId }
     });
 
-    return new NextResponse(null, { status: 204 });
+    return NextResponse.json({ message: "Task deleted successfully" });
   } catch (error) {
-    console.error("Error deleting task:", error);
-    return new NextResponse("Internal error", { status: 500 });
+    console.error("[TASK_DELETE]", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 } 

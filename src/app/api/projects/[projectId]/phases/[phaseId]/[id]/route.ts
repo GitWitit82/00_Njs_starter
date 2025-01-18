@@ -1,204 +1,198 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { prisma } from "@/lib/db"
-import { z } from "zod"
+import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
 
-// Schema for phase update
-const phaseUpdateSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  description: z.string().optional(),
-  order: z.number().int().min(0).optional(),
-  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "ON_HOLD"]).optional(),
-})
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-/**
- * PUT /api/projects/[projectId]/phases/[phaseId]
- * Update a phase
- */
-export async function PUT(
-  request: Request,
-  { params }: { params: { projectId: string; phaseId: string } }
-) {
   try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const phaseId = paths[paths.indexOf("phases") + 1]
 
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: { managerId: true },
-    })
-
-    if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
-    }
-
-    // Only allow manager or admin to update phases
-    if (
-      project.managerId !== session.user.id &&
-      session.user.role !== "ADMIN"
-    ) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const json = await request.json()
-    const body = phaseUpdateSchema.parse(json)
-
-    // If order is changed, handle reordering
-    if (body.order !== undefined) {
-      const currentPhase = await prisma.projectPhase.findUnique({
-        where: { id: params.phaseId },
-        select: { order: true },
-      })
-
-      if (currentPhase && currentPhase.order !== body.order) {
-        // Moving down
-        if (body.order > currentPhase.order) {
-          await prisma.projectPhase.updateMany({
-            where: {
-              projectId: params.projectId,
-              order: {
-                gt: currentPhase.order,
-                lte: body.order,
-              },
-            },
-            data: {
-              order: {
-                decrement: 1,
-              },
-            },
-          })
-        }
-        // Moving up
-        else {
-          await prisma.projectPhase.updateMany({
-            where: {
-              projectId: params.projectId,
-              order: {
-                gte: body.order,
-                lt: currentPhase.order,
-              },
-            },
-            data: {
-              order: {
-                increment: 1,
-              },
-            },
-          })
-        }
-      }
-    }
-
-    const phase = await prisma.projectPhase.update({
-      where: { id: params.phaseId },
-      data: body,
+    const phase = await prisma.projectPhase.findUnique({
+      where: {
+        id: phaseId,
+        projectId: projectId
+      },
       include: {
         tasks: {
-          orderBy: { order: "asc" },
           include: {
-            department: true,
             assignedTo: {
               select: {
                 id: true,
                 name: true,
-                email: true,
-                image: true,
-              },
+                email: true
+              }
             },
-          },
-        },
-      },
-    })
-
-    // Calculate phase progress
-    const totalTasks = phase.tasks.length
-    const completedTasks = phase.tasks.filter(
-      (task) => task.status === "COMPLETED"
-    ).length
-    const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
-
-    return NextResponse.json({
-      ...phase,
-      progress: Math.round(progress),
-      _count: {
-        tasks: totalTasks,
-        completedTasks,
-      },
-    })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 422 })
-    }
-
-    console.error("[PHASE_PUT]", error)
-    return new NextResponse("Internal Error", { status: 500 })
-  }
-}
-
-/**
- * DELETE /api/projects/[projectId]/phases/[phaseId]
- * Delete a phase
- */
-export async function DELETE(
-  request: Request,
-  { params }: { params: { projectId: string; phaseId: string } }
-) {
-  try {
-    const session = await getServerSession()
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: { managerId: true },
-    })
-
-    if (!project) {
-      return new NextResponse("Project not found", { status: 404 })
-    }
-
-    // Only allow manager or admin to delete phases
-    if (
-      project.managerId !== session.user.id &&
-      session.user.role !== "ADMIN"
-    ) {
-      return new NextResponse("Forbidden", { status: 403 })
-    }
-
-    const phase = await prisma.projectPhase.findUnique({
-      where: { id: params.phaseId },
-      select: { order: true },
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!phase) {
-      return new NextResponse("Phase not found", { status: 404 })
+      return NextResponse.json(
+        { error: "Phase not found" },
+        { status: 404 }
+      )
     }
 
-    // Delete the phase
-    await prisma.projectPhase.delete({
-      where: { id: params.phaseId },
-    })
+    return NextResponse.json(phase)
+  } catch (error) {
+    console.error("[PHASE_GET]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
+  }
+}
 
-    // Reorder remaining phases
-    await prisma.projectPhase.updateMany({
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const phaseId = paths[paths.indexOf("phases") + 1]
+    const { name, description, order, status } = await request.json()
+
+    const phase = await prisma.projectPhase.findUnique({
       where: {
-        projectId: params.projectId,
-        order: {
-          gt: phase.order,
-        },
-      },
-      data: {
-        order: {
-          decrement: 1,
-        },
-      },
+        id: phaseId,
+        projectId: projectId
+      }
     })
 
-    return new NextResponse(null, { status: 204 })
+    if (!phase) {
+      return NextResponse.json(
+        { error: "Phase not found" },
+        { status: 404 }
+      )
+    }
+
+    const updatedPhase = await prisma.projectPhase.update({
+      where: { id: phaseId },
+      data: {
+        name,
+        description,
+        order,
+        status
+      },
+      include: {
+        tasks: {
+          include: {
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return NextResponse.json(updatedPhase)
+  } catch (error) {
+    console.error("[PHASE_PATCH]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
+    const paths = request.url.split("/")
+    const projectId = paths[paths.indexOf("projects") + 1]
+    const phaseId = paths[paths.indexOf("phases") + 1]
+
+    const phase = await prisma.projectPhase.findUnique({
+      where: {
+        id: phaseId,
+        projectId: projectId
+      }
+    })
+
+    if (!phase) {
+      return NextResponse.json(
+        { error: "Phase not found" },
+        { status: 404 }
+      )
+    }
+
+    await prisma.projectPhase.delete({
+      where: { id: phaseId }
+    })
+
+    return NextResponse.json({ message: "Phase deleted successfully" })
   } catch (error) {
     console.error("[PHASE_DELETE]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

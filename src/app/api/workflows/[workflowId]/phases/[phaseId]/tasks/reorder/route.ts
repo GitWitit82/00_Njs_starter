@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { RouteHandler } from "@/lib/auth-utils"
-import { Role } from "@prisma/client"
+import { authOptions } from "@/lib/auth"
 
-type RouteParams = {
-  workflowId: string
-  phaseId: string
+interface TaskOrder {
+  id: string;
+  order: number;
 }
 
-export const PUT = RouteHandler<RouteParams>(async (req, { params }) => {
+export async function PUT(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const { tasks } = await req.json()
+    const paths = request.url.split("/")
+    const phaseId = paths[paths.indexOf("phases") + 1]
+    const { tasks } = await request.json()
     
     // Update task orders in a transaction
     await prisma.$transaction(
-      tasks.map((task: { id: string; order: number }) =>
+      tasks.map((task: TaskOrder) =>
         prisma.task.update({
           where: { 
             id: task.id,
-            phaseId: params.phaseId 
+            phaseId: phaseId 
           },
           data: { order: task.order }
         })
@@ -27,7 +34,10 @@ export const PUT = RouteHandler<RouteParams>(async (req, { params }) => {
 
     return NextResponse.json({ message: "Tasks reordered successfully" })
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("[TASKS_REORDER]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
-}, Role.MANAGER) 
+} 

@@ -29,19 +29,20 @@ const taskSchema = z.object({
  * GET /api/workflows/:workflowId/phases/:phaseId/tasks
  * Retrieves all tasks for a workflow phase
  */
-export async function GET(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
-) {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Extract IDs from URL
+    const urlParts = request.url.split("/")
+    const phaseId = urlParts[urlParts.indexOf("phases") + 1]
 
     const tasks = await prisma.workflowTask.findMany({
       where: {
-        phaseId: params.phaseId,
+        phaseId: phaseId,
       },
       include: {
         department: {
@@ -86,8 +87,8 @@ export async function GET(
 
     return NextResponse.json(tasks)
   } catch (error) {
-    console.error("Error fetching tasks:", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[GET] /api/workflows/[workflowId]/phases/[phaseId]/tasks error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -95,22 +96,23 @@ export async function GET(
  * POST /api/workflows/:workflowId/phases/:phaseId/tasks
  * Creates a new task in a workflow phase
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
-) {
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const json = await req.json()
+    // Extract IDs from URL
+    const urlParts = request.url.split("/")
+    const phaseId = urlParts[urlParts.indexOf("phases") + 1]
+
+    const json = await request.json()
     const body = taskSchema.parse(json) as WorkflowTaskCreatePayload
 
     // Get the current highest order
     const highestOrder = await prisma.workflowTask.findFirst({
-      where: { phaseId: params.phaseId },
+      where: { phaseId: phaseId },
       orderBy: { order: "desc" },
       select: { order: true },
     })
@@ -125,7 +127,7 @@ export async function POST(
         order: body.order ?? (highestOrder?.order ?? -1) + 1,
         departmentId: body.departmentId,
         phase: {
-          connect: { id: params.phaseId },
+          connect: { id: phaseId },
         },
       },
     })
@@ -184,11 +186,11 @@ export async function POST(
     return NextResponse.json(completeTask)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
+      return NextResponse.json({ error: "Invalid request data" }, { status: 422 })
     }
 
-    console.error("Error creating task:", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[POST] /api/workflows/[workflowId]/phases/[phaseId]/tasks error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -196,17 +198,19 @@ export async function POST(
  * PATCH /api/workflows/:workflowId/phases/:phaseId/tasks/:taskId
  * Updates an existing task
  */
-export async function PATCH(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string; taskId: string } }
-) {
+export async function PATCH(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const json = await req.json()
+    // Extract IDs from URL
+    const urlParts = request.url.split("/")
+    const phaseId = urlParts[urlParts.indexOf("phases") + 1]
+    const taskId = urlParts[urlParts.indexOf("tasks") + 1]
+
+    const json = await request.json()
     const body = taskSchema.partial().parse(json) as WorkflowTaskUpdatePayload
 
     // Update task and dependencies in a transaction
@@ -214,8 +218,8 @@ export async function PATCH(
       // Update the task
       const task = await tx.workflowTask.update({
         where: {
-          id: params.taskId,
-          phaseId: params.phaseId,
+          id: taskId,
+          phaseId: phaseId,
         },
         data: {
           name: body.name,
@@ -290,60 +294,54 @@ export async function PATCH(
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse("Invalid request data", { status: 422 })
+      return NextResponse.json({ error: "Invalid request data" }, { status: 422 })
     }
 
-    console.error("Error updating task:", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[PATCH] /api/workflows/[workflowId]/phases/[phaseId]/tasks/[taskId] error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 /**
  * DELETE /api/workflows/:workflowId/phases/:phaseId/tasks/:taskId
- * Deletes a task and reorders remaining tasks
+ * Deletes a task from a workflow phase
  */
-export async function DELETE(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string; taskId: string } }
-) {
+export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Delete task and reorder remaining tasks in a transaction
-    await prisma.$transaction(async (tx) => {
-      // Get the task to be deleted
-      const task = await tx.workflowTask.findUnique({
-        where: { id: params.taskId },
-        select: { order: true },
-      })
+    // Extract IDs from URL
+    const urlParts = request.url.split("/")
+    const phaseId = urlParts[urlParts.indexOf("phases") + 1]
+    const taskId = urlParts[urlParts.indexOf("tasks") + 1]
 
-      if (!task) {
-        throw new Error("Task not found")
-      }
+    // Delete task and its dependencies in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete task dependencies
+      await tx.workflowTaskDependency.deleteMany({
+        where: {
+          OR: [
+            { taskId: taskId },
+            { dependsOnId: taskId },
+          ],
+        },
+      })
 
       // Delete the task
       await tx.workflowTask.delete({
-        where: { id: params.taskId },
-      })
-
-      // Reorder remaining tasks
-      await tx.workflowTask.updateMany({
         where: {
-          phaseId: params.phaseId,
-          order: { gt: task.order },
-        },
-        data: {
-          order: { decrement: 1 },
+          id: taskId,
+          phaseId: phaseId,
         },
       })
     })
 
-    return new NextResponse(null, { status: 204 })
+    return NextResponse.json({ message: "Task deleted successfully" })
   } catch (error) {
-    console.error("Error deleting task:", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[DELETE] /api/workflows/[workflowId]/phases/[phaseId]/tasks/[taskId] error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 } 

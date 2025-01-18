@@ -1,14 +1,23 @@
 import { notFound } from 'next/navigation'
-import { db } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { FormStatusOverview } from '@/components/forms/status/FormStatusOverview'
 import { FormResponse } from '@/components/forms/FormResponse'
+import { Metadata } from 'next'
 
-export default async function FormInstancePage({
-  params,
-}: {
+export const dynamic = 'force-dynamic'
+
+type Props = {
   params: { instanceId: string }
-}) {
-  const instance = await db.formInstance.findUnique({
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  return {
+    title: `Form Instance ${params.instanceId}`,
+  }
+}
+
+export default async function FormInstancePage({ params }: Props) {
+  const instance = await prisma.formInstance.findUnique({
     where: { id: params.instanceId },
     include: {
       template: true,

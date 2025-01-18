@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { authOptions } from '@/lib/auth';
 
 const phaseSchema = z.object({
   name: z.string().min(1),
@@ -15,19 +16,20 @@ const phaseSchema = z.object({
  * GET /api/workflows/:workflowId/phases
  * Retrieves all phases for a workflow
  */
-export async function GET(
-  req: Request,
-  { params }: { params: { workflowId: string } }
-) {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Extract workflowId from URL
+    const urlParts = request.url.split('/');
+    const workflowId = urlParts[urlParts.indexOf('workflows') + 1];
+
     const phases = await prisma.phase.findMany({
       where: {
-        workflowId: params.workflowId,
+        workflowId: workflowId,
       },
       include: {
         tasks: {
@@ -50,9 +52,9 @@ export async function GET(
 
     return NextResponse.json(phases);
   } catch (error) {
-    console.error('Error fetching phases:', error);
+    console.error('[GET] /api/workflows/[workflowId]/phases error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch phases' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -62,22 +64,23 @@ export async function GET(
  * POST /api/workflows/:workflowId/phases
  * Creates a new phase in a workflow
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { workflowId: string } }
-) {
+export async function POST(request: Request) {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const json = await req.json();
+    // Extract workflowId from URL
+    const urlParts = request.url.split('/');
+    const workflowId = urlParts[urlParts.indexOf('workflows') + 1];
+
+    const json = await request.json();
     const body = phaseSchema.parse(json);
 
     // Get the current highest order
     const highestOrder = await prisma.phase.findFirst({
-      where: { workflowId: params.workflowId },
+      where: { workflowId: workflowId },
       orderBy: { order: 'desc' },
       select: { order: true },
     });
@@ -90,7 +93,7 @@ export async function POST(
         estimatedDuration: body.estimatedDuration,
         metadata: body.metadata,
         workflow: {
-          connect: { id: params.workflowId },
+          connect: { id: workflowId },
         },
       },
       include: {
@@ -104,9 +107,9 @@ export async function POST(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
-    console.error('Error creating phase:', error);
+    console.error('[POST] /api/workflows/[workflowId]/phases error:', error);
     return NextResponse.json(
-      { error: 'Failed to create phase' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -116,23 +119,25 @@ export async function POST(
  * PUT /api/workflows/:workflowId/phases/:phaseId
  * Updates an existing phase
  */
-export async function PUT(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
-) {
+export async function PUT(request: Request) {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const json = await req.json();
+    // Extract IDs from URL
+    const urlParts = request.url.split('/');
+    const workflowId = urlParts[urlParts.indexOf('workflows') + 1];
+    const phaseId = urlParts[urlParts.indexOf('phases') + 1];
+
+    const json = await request.json();
     const body = phaseSchema.parse(json);
 
     const phase = await prisma.phase.update({
       where: {
-        id: params.phaseId,
-        workflowId: params.workflowId,
+        id: phaseId,
+        workflowId: workflowId,
       },
       data: {
         name: body.name,
@@ -152,9 +157,9 @@ export async function PUT(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
-    console.error('Error updating phase:', error);
+    console.error('[PUT] /api/workflows/[workflowId]/phases/[phaseId] error:', error);
     return NextResponse.json(
-      { error: 'Failed to update phase' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -164,21 +169,23 @@ export async function PUT(
  * DELETE /api/workflows/:workflowId/phases/:phaseId
  * Deletes a phase and reorders remaining phases
  */
-export async function DELETE(
-  req: Request,
-  { params }: { params: { workflowId: string; phaseId: string } }
-) {
+export async function DELETE(request: Request) {
   try {
-    const session = await getServerSession();
-    if (!session) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Extract IDs from URL
+    const urlParts = request.url.split('/');
+    const workflowId = urlParts[urlParts.indexOf('workflows') + 1];
+    const phaseId = urlParts[urlParts.indexOf('phases') + 1];
 
     // Start a transaction to handle phase deletion and reordering
     const result = await prisma.$transaction(async (tx) => {
       // Get the phase to be deleted
       const phase = await tx.phase.findUnique({
-        where: { id: params.phaseId },
+        where: { id: phaseId },
         select: { order: true },
       });
 
@@ -188,13 +195,13 @@ export async function DELETE(
 
       // Delete the phase
       await tx.phase.delete({
-        where: { id: params.phaseId },
+        where: { id: phaseId },
       });
 
       // Reorder remaining phases
       await tx.phase.updateMany({
         where: {
-          workflowId: params.workflowId,
+          workflowId: workflowId,
           order: {
             gt: phase.order,
           },
@@ -208,16 +215,16 @@ export async function DELETE(
 
       // Get updated phases list
       return tx.phase.findMany({
-        where: { workflowId: params.workflowId },
+        where: { workflowId: workflowId },
         orderBy: { order: 'asc' },
       });
     });
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error deleting phase:', error);
+    console.error('[DELETE] /api/workflows/[workflowId]/phases/[phaseId] error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete phase' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

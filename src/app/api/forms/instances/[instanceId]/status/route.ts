@@ -1,45 +1,49 @@
-import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { checkFormCompletion } from '@/lib/utils/form-status'
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
+import { FormInstanceStatus } from "@prisma/client"
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { instanceId: string } }
-) {
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
+    const paths = request.url.split("/")
+    const instanceId = paths[paths.indexOf("instances") + 1]
     const { status } = await request.json()
 
-    const instance = await db.formInstance.findUnique({
-      where: { id: params.instanceId },
-      include: {
-        template: {
-          include: {
-            schema: true
-          }
-        },
-        responses: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
-      }
+    if (!Object.values(FormInstanceStatus).includes(status)) {
+      return NextResponse.json(
+        { error: "Invalid status value" },
+        { status: 400 }
+      )
+    }
+
+    const formInstance = await prisma.formInstance.findUnique({
+      where: { id: instanceId }
     })
 
-    if (!instance) {
-      return new NextResponse('Form instance not found', { status: 404 })
+    if (!formInstance) {
+      return NextResponse.json(
+        { error: "Form instance not found" },
+        { status: 404 }
+      )
     }
 
-    if (status === 'COMPLETED' && !checkFormCompletion(instance)) {
-      return new NextResponse('Form is incomplete', { status: 400 })
-    }
-
-    const updatedInstance = await db.formInstance.update({
-      where: { id: params.instanceId },
+    const updatedInstance = await prisma.formInstance.update({
+      where: { id: instanceId },
       data: { status }
     })
 
     return NextResponse.json(updatedInstance)
   } catch (error) {
-    console.error('Error updating form status:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    console.error("[FORM_INSTANCE_STATUS_PATCH]", error)
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    )
   }
 } 

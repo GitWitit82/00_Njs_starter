@@ -1,57 +1,147 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { RouteHandler } from "@/lib/auth-utils"
-import { Role } from "@prisma/client"
+import { authOptions } from "@/lib/auth"
 
-export const GET = RouteHandler(async () => {
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const projects = await prisma.project.findMany({
       include: {
-        manager: true,
         tasks: {
           include: {
-            assignee: true,
-          },
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+        phases: true,
+        formTemplates: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
+
     return NextResponse.json(projects)
   } catch (error) {
-    console.error("Failed to fetch projects:", error)
+    console.error("[PROJECTS_GET]", error)
     return NextResponse.json(
-      { error: "Failed to fetch projects" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }
-}, Role.USER)
+}
 
-export const POST = RouteHandler(async (req: NextRequest) => {
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
-    const data = await req.json()
+    const { name, description, type, status, metadata } = await request.json()
+
     const project = await prisma.project.create({
       data: {
-        name: data.name,
-        description: data.description,
-        managerId: data.managerId,
+        name,
+        description,
+        type,
+        status,
+        metadata
       },
       include: {
-        manager: true,
         tasks: {
           include: {
-            assignee: true,
-          },
+            assignedTo: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            formInstances: {
+              include: {
+                template: true,
+                version: true,
+                responses: {
+                  include: {
+                    submittedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    },
+                    reviewedBy: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-      },
+        phases: true,
+        formTemplates: {
+          include: {
+            versions: {
+              where: {
+                isCurrent: true
+              }
+            }
+          }
+        }
+      }
     })
+
     return NextResponse.json(project)
   } catch (error) {
-    console.error("Failed to create project:", error)
+    console.error("[PROJECTS_POST]", error)
     return NextResponse.json(
-      { error: "Failed to create project" },
+      { error: "Internal Server Error" },
       { status: 500 }
     )
   }
-}, Role.MANAGER) 
+} 
