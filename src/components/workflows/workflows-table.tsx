@@ -85,7 +85,7 @@ export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
     }
   };
 
-  const handleSuccess = (workflow: Workflow) => {
+  const handleSuccess = () => {
     setShowModal(false);
     router.refresh();
     toast.success(selectedWorkflow ? "Workflow updated successfully" : "Workflow created successfully");
