@@ -1,6 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+/**
+ * @file DepartmentModal Component
+ * @description Modal for creating and editing departments
+ */
+
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Department } from "@prisma/client"
@@ -27,28 +32,35 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 const departmentSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  color: z.string().regex(/^#[0-9A-F]{6}$/i, "Must be a valid hex color"),
+  color: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, "Invalid color format"),
 })
 
 type FormData = z.infer<typeof departmentSchema>
 
 interface DepartmentModalProps {
-  department?: Department | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess: (department: Department) => void
+  department: Department | null
+  isOpen: boolean
+  onClose: () => void
+  onSubmit: (departmentId: string | undefined, data: Partial<Department>) => Promise<void>
+  onDelete?: (departmentId: string) => Promise<void>
+  isLoading?: boolean
 }
 
+/**
+ * DepartmentModal component for creating and editing departments
+ * @param {DepartmentModalProps} props - Component props
+ * @returns {JSX.Element} Rendered component
+ */
 export function DepartmentModal({
   department,
-  open,
-  onOpenChange,
-  onSuccess,
+  isOpen,
+  onClose,
+  onSubmit,
+  onDelete,
+  isLoading = false,
 }: DepartmentModalProps) {
-  const [error, setError] = useState<string | null>(null)
-
   const form = useForm<FormData>({
     resolver: zodResolver(departmentSchema),
     defaultValues: {
@@ -57,8 +69,6 @@ export function DepartmentModal({
       color: "#000000",
     },
   })
-
-  const isEditing = !!department
 
   useEffect(() => {
     if (department) {
@@ -76,57 +86,40 @@ export function DepartmentModal({
     }
   }, [department, form])
 
-  const onSubmit = async (values: FormData) => {
+  const handleSubmit = async (values: FormData) => {
     try {
-      const url = isEditing
-        ? `/api/departments/${department.id}`
-        : "/api/departments"
-      const method = isEditing ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Failed to save department")
-      }
-
-      const savedDepartment = await response.json()
-      onSuccess(savedDepartment)
+      await onSubmit(department?.id, values)
       form.reset()
     } catch (error) {
-      console.error("Error:", error)
-      setError(error instanceof Error ? error.message : "Failed to save department")
+      console.error("Error submitting department:", error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!department?.id || !onDelete) return
+    try {
+      await onDelete(department.id)
+    } catch (error) {
+      console.error("Error deleting department:", error)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Edit Department" : "Create Department"}
+            {department ? "Edit Department" : "Create Department"}
           </DialogTitle>
           <DialogDescription>
-            {isEditing
-              ? "Make changes to your department here."
+            {department
+              ? "Make changes to the department here."
               : "Add a new department to manage tasks."}
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <div className="rounded-md bg-destructive/15 p-4 text-destructive">
-            {error}
-          </div>
-        )}
-
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -164,22 +157,19 @@ export function DepartmentModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Color</FormLabel>
-                  <div className="flex items-center gap-4">
-                    <FormControl>
-                      <Input type="color" {...field} />
-                    </FormControl>
+                  <div className="flex gap-2">
                     <FormControl>
                       <Input
-                        placeholder="Enter hex color"
+                        type="color"
+                        className="w-12 h-10 p-1 bg-transparent"
                         {...field}
-                        onChange={(e) => {
-                          const value = e.target.value.toUpperCase()
-                          if (value.startsWith("#") && value.length <= 7) {
-                            field.onChange(value)
-                          }
-                        }}
                       />
                     </FormControl>
+                    <Input
+                      placeholder="Enter color hex"
+                      {...field}
+                      className="font-mono"
+                    />
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -187,15 +177,24 @@ export function DepartmentModal({
             />
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">
-                {isEditing ? "Save Changes" : "Create"}
+              {department && onDelete && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={isLoading}
+                >
+                  Delete
+                </Button>
+              )}
+              <Button type="submit" disabled={isLoading}>
+                {isLoading
+                  ? department
+                    ? "Updating..."
+                    : "Creating..."
+                  : department
+                  ? "Update"
+                  : "Create"}
               </Button>
             </DialogFooter>
           </form>

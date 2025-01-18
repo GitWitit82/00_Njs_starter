@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 
 const workflowSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -76,7 +77,7 @@ export function WorkflowModal({
   const onSubmit = async (values: FormData) => {
     try {
       const url = isEditing ? `/api/workflows/${workflow.id}` : "/api/workflows"
-      const method = isEditing ? "PUT" : "POST"
+      const method = isEditing ? "PATCH" : "POST"
 
       const response = await fetch(url, {
         method,
@@ -86,14 +87,18 @@ export function WorkflowModal({
         body: JSON.stringify(values),
       })
 
-      if (!response.ok) throw new Error("Failed to save workflow")
+      const data = await response.json()
 
-      const savedWorkflow = await response.json()
-      onSuccess(savedWorkflow)
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save workflow")
+      }
+
+      onSuccess(data)
       form.reset()
+      toast.success(isEditing ? "Workflow updated successfully" : "Workflow created successfully")
     } catch (error) {
       console.error("Error:", error)
-      // You might want to show an error message to the user here
+      toast.error(error instanceof Error ? error.message : "Failed to save workflow")
     }
   }
 
@@ -152,7 +157,7 @@ export function WorkflowModal({
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
                 {isEditing ? "Save Changes" : "Create"}
               </Button>
             </DialogFooter>

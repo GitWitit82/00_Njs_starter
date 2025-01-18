@@ -2,28 +2,36 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
+import * as z from 'zod'
+
+const workflowSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  description: z.string().optional(),
+})
 
 /**
  * GET /api/workflows/:workflowId
  * Retrieves a specific workflow with its phases and tasks
  */
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: { workflowId: string } }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Extract workflowId from URL
-    const urlParts = request.url.split('/')
-    const workflowId = urlParts[urlParts.indexOf('workflows') + 1]
-
     const workflow = await prisma.workflow.findUnique({
-      where: { id: workflowId },
+      where: { id: params.workflowId },
       include: {
         phases: {
           include: {
             tasks: true
+          },
+          orderBy: {
+            order: 'asc'
           }
         }
       }
@@ -35,7 +43,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(workflow)
   } catch (error) {
-    console.error('[GET] /api/workflows/[workflowId] error:', error)
+    console.error('[WORKFLOW_GET]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -44,28 +52,42 @@ export async function GET(request: Request) {
  * PATCH /api/workflows/:workflowId
  * Updates a specific workflow
  */
-export async function PATCH(request: Request) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: { workflowId: string } }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Extract workflowId from URL
-    const urlParts = request.url.split('/')
-    const workflowId = urlParts[urlParts.indexOf('workflows') + 1]
+    const json = await request.json()
+    const result = workflowSchema.safeParse(json)
 
-    const { name, description } = await request.json()
+    if (!result.success) {
+      const { errors } = result.error
+      return NextResponse.json(
+        { error: 'Invalid request', errors },
+        { status: 400 }
+      )
+    }
 
     const workflow = await prisma.workflow.update({
-      where: { id: workflowId },
-      data: { name, description }
+      where: { id: params.workflowId },
+      data: {
+        name: result.data.name,
+        description: result.data.description,
+      }
     })
 
     return NextResponse.json(workflow)
   } catch (error) {
-    console.error('[PATCH] /api/workflows/[workflowId] error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[WORKFLOW_PATCH]', error)
+    if (error.code === 'P2025') {
+      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Failed to update workflow' }, { status: 500 })
   }
 }
 
@@ -73,24 +95,26 @@ export async function PATCH(request: Request) {
  * DELETE /api/workflows/:workflowId
  * Deletes a specific workflow
  */
-export async function DELETE(request: Request) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: { workflowId: string } }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Extract workflowId from URL
-    const urlParts = request.url.split('/')
-    const workflowId = urlParts[urlParts.indexOf('workflows') + 1]
-
     await prisma.workflow.delete({
-      where: { id: workflowId }
+      where: { id: params.workflowId }
     })
 
     return NextResponse.json({ message: 'Workflow deleted successfully' })
   } catch (error) {
-    console.error('[DELETE] /api/workflows/[workflowId] error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[WORKFLOW_DELETE]', error)
+    if (error.code === 'P2025') {
+      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Failed to delete workflow' }, { status: 500 })
   }
 } 

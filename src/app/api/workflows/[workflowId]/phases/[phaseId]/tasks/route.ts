@@ -125,7 +125,9 @@ export async function POST(request: Request) {
         priority: body.priority,
         manHours: body.manHours,
         order: body.order ?? (highestOrder?.order ?? -1) + 1,
-        departmentId: body.departmentId,
+        department: body.departmentId ? {
+          connect: { id: body.departmentId }
+        } : undefined,
         phase: {
           connect: { id: phaseId },
         },

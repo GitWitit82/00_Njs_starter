@@ -7,8 +7,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Priority } from "@prisma/client"
+import { Priority, WorkflowTask } from "@prisma/client"
 import { Plus, MoreHorizontal } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -63,24 +64,86 @@ export function TasksTable({
   isLoading = false,
 }: TasksTableProps) {
   const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<WorkflowTaskWithDepartment | undefined>(undefined)
-
-  /**
-   * Handles editing a task
-   */
-  const handleEditClick = (task: WorkflowTaskWithDepartment) => {
-    setSelectedTask(task)
-    setModalOpen(true)
-  }
+  const [selectedTask, setSelectedTask] = useState<WorkflowTaskWithDepartment | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   /**
    * Handles creating a new task
    */
-  const handleNewTask = () => {
-    setSelectedTask(undefined)
-    setModalOpen(true)
+  const handleCreateTask = async (_: undefined, data: Partial<WorkflowTask>) => {
+    try {
+      setIsSubmitting(true)
+      const response = await fetch(
+        `/api/workflows/${workflowId}/phases/${phaseId}/tasks`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: data.name,
+            description: data.description,
+            priority: data.priority || "MEDIUM",
+            manHours: data.manHours || 0,
+            departmentId: data.departmentId,
+            order: tasks.length,
+            status: "TODO", // Default status for new tasks
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create task")
+      }
+
+      router.refresh()
+      setModalOpen(false)
+      toast.success("Task created successfully")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create task")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  /**
+   * Handles updating a task
+   */
+  const handleUpdateTask = async (taskId: string, data: Partial<WorkflowTask>) => {
+    try {
+      setIsSubmitting(true)
+      const response = await fetch(
+        `/api/workflows/${workflowId}/phases/${phaseId}/tasks/${taskId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: data.name,
+            description: data.description,
+            priority: data.priority,
+            manHours: data.manHours,
+            departmentId: data.departmentId,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to update task")
+      }
+
+      router.refresh()
+      setModalOpen(false)
+      toast.success("Task updated successfully")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update task")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   /**
@@ -88,6 +151,7 @@ export function TasksTable({
    */
   const handleDeleteTask = async (taskId: string) => {
     try {
+      setIsSubmitting(true)
       const response = await fetch(
         `/api/workflows/${workflowId}/phases/${phaseId}/tasks/${taskId}`,
         {
@@ -96,13 +160,17 @@ export function TasksTable({
       )
 
       if (!response.ok) {
-        throw new Error("Failed to delete task")
+        const error = await response.json()
+        throw new Error(error.error || "Failed to delete task")
       }
 
       router.refresh()
+      setModalOpen(false)
+      toast.success("Task deleted successfully")
     } catch (error) {
-      console.error("Error deleting task:", error)
-      setError("Failed to delete task. Please try again.")
+      toast.error(error instanceof Error ? error.message : "Failed to delete task")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -112,14 +180,13 @@ export function TasksTable({
 
   return (
     <div className="space-y-4">
-      {error && (
-        <div className="rounded-md bg-destructive/15 p-4 text-destructive">
-          {error}
-        </div>
-      )}
-
       <div className="flex justify-end">
-        <Button onClick={handleNewTask}>
+        <Button
+          onClick={() => {
+            setSelectedTask(null)
+            setModalOpen(true)
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           New Task
         </Button>
@@ -164,7 +231,12 @@ export function TasksTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditClick(task)}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedTask(task)
+                          setModalOpen(true)
+                        }}
+                      >
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -183,11 +255,12 @@ export function TasksTable({
       </Table>
 
       <TaskModal
-        workflowId={workflowId}
-        phaseId={phaseId}
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
         task={selectedTask}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={selectedTask ? handleUpdateTask : handleCreateTask}
+        onDelete={selectedTask ? handleDeleteTask : undefined}
+        isLoading={isSubmitting}
       />
     </div>
   )

@@ -1,27 +1,36 @@
-import { Metadata } from "next"
-import { getServerSession } from "next-auth"
+/**
+ * @file Departments Page Component
+ * @description Displays and manages departments
+ */
 
-import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
-import { DepartmentsClient } from "./client"
+import { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
+import { DepartmentsTable } from "@/components/departments/departments-table";
 
 export const metadata: Metadata = {
   title: "Departments",
-  description: "Manage departments and their settings",
-}
+  description: "Manage departments for task assignments",
+};
 
 export default async function DepartmentsPage() {
-  const session = await getServerSession(authOptions)
-
+  const session = await getServerSession(authOptions);
+  
   if (!session?.user) {
-    return null // This will trigger the auth middleware redirect
+    redirect("/auth/login");
   }
 
-  const departments = await db.department.findMany({
+  const departments = await prisma.department.findMany({
     orderBy: {
-      createdAt: "desc",
+      name: "asc",
     },
-  })
+  });
 
-  return <DepartmentsClient initialDepartments={departments} />
+  return (
+    <div className="container mx-auto py-10">
+      <DepartmentsTable departments={departments} />
+    </div>
+  );
 } 

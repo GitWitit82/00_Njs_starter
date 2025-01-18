@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Workflow } from '@prisma/client';
 import {
   Table,
@@ -23,8 +24,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { toast } from "sonner"
+import { WorkflowModal } from './workflow-modal';
 
 interface WorkflowsTableProps {
   initialData: Workflow[];
@@ -35,7 +38,10 @@ interface WorkflowsTableProps {
  * WorkflowsTable component
  */
 export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const handleDelete = async (workflowId: string) => {
     try {
@@ -47,6 +53,42 @@ export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleView = (workflowId: string) => {
+    router.push(`/workflows/${workflowId}/phases`);
+  };
+
+  const handleEdit = (workflow: Workflow) => {
+    setSelectedWorkflow(workflow);
+    setShowModal(true);
+  };
+
+  const handleDuplicate = async (workflow: Workflow) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/workflows/${workflow.id}/duplicate`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate workflow');
+      }
+
+      router.refresh();
+      toast.success("Workflow duplicated successfully");
+    } catch (error) {
+      toast.error("Failed to duplicate workflow");
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSuccess = (workflow: Workflow) => {
+    setShowModal(false);
+    router.refresh();
+    toast.success(selectedWorkflow ? "Workflow updated successfully" : "Workflow created successfully");
   };
 
   return (
@@ -89,9 +131,23 @@ export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleView(workflow.id)}>
+                      View
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleEdit(workflow)}>
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleDuplicate(workflow)}
+                      disabled={isLoading}
+                    >
+                      Duplicate
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => handleDelete(workflow.id)}
                       disabled={isLoading}
+                      className="text-destructive"
                     >
                       Delete
                     </DropdownMenuItem>
@@ -102,6 +158,13 @@ export function WorkflowsTable({ initialData, onDelete }: WorkflowsTableProps) {
           ))}
         </TableBody>
       </Table>
+
+      <WorkflowModal
+        workflow={selectedWorkflow}
+        open={showModal}
+        onOpenChange={setShowModal}
+        onSuccess={handleSuccess}
+      />
     </div>
   );
 } 

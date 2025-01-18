@@ -5,19 +5,46 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Create default admin user if it doesn't exist
-  const adminUser = await prisma.user.upsert({
-    where: { name: "admin" },
-    update: {},
-    create: {
-      name: "admin",
-      email: "admin@example.com",
-      password: await hash("admin123", 10),
-      role: "ADMIN",
-    },
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "User" (id, name, email, role, password, "createdAt", "updatedAt")
+    VALUES (
+      gen_random_uuid(),
+      'admin',
+      'admin@example.com',
+      'ADMIN',
+      ${await hash("admin123", 10)},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (name) DO NOTHING;
+  `;
 
-  // Create default workflows if they don't exist
-  const vehicleWrapWorkflow = await prisma.workflow.upsert({
+  // Create departments
+  const departments = [
+    { name: "Marketing", color: "#FF5733", description: "Marketing department" },
+    { name: "Project Management", color: "#33FF57", description: "Project Management department" },
+    { name: "Graphic Design", color: "#3357FF", description: "Graphic Design department" },
+    { name: "Finance", color: "#FF33F5", description: "Finance department" },
+    { name: "Production", color: "#33FFF5", description: "Production department" },
+    { name: "Installation", color: "#F5FF33", description: "Installation department" },
+    { name: "Prep", color: "#FF3333", description: "Prep department" },
+    { name: "All Departments", color: "#333333", description: "All departments" },
+  ];
+
+  for (const dept of departments) {
+    await prisma.department.upsert({
+      where: { name: dept.name },
+      update: {},
+      create: dept,
+    });
+  }
+
+  // Get department references
+  const deptRefs = await prisma.department.findMany();
+  const getDeptId = (name: string) => deptRefs.find(d => d.name === name)?.id || "";
+
+  // Create Vehicle Wrap Standard workflow
+  await prisma.workflow.upsert({
     where: { id: "vehicle-wrap-workflow" },
     update: {},
     create: {
@@ -27,273 +54,464 @@ async function main() {
       phases: {
         create: [
           {
-            name: "Planning",
-            description: "Initial planning and design phase",
+            name: "Marketing",
+            description: "Marketing and initial client interaction phase",
             order: 1,
             tasks: {
               create: [
                 {
-                  name: "Initial Consultation",
-                  description: "Meet with client to discuss requirements",
+                  name: "Creative Concept Meeting",
+                  description: "Initial creative concept meeting with client",
                   priority: "HIGH",
                   order: 1,
-                  manHours: 2,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Marketing"),
                 },
                 {
-                  name: "Design Approval",
-                  description: "Get client approval on design",
+                  name: "Follow up Email",
+                  description: "Send follow up email to client",
+                  priority: "MEDIUM",
+                  order: 2,
+                  manHours: 0.083,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "Rough Mock up",
+                  description: "Create rough mock up of design",
+                  priority: "HIGH",
+                  order: 3,
+                  manHours: 1,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Photos & Sizing",
+                  description: "Take photos and measurements",
+                  priority: "HIGH",
+                  order: 4,
+                  manHours: 0.75,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Physical Inspection",
+                  description: "Conduct physical inspection",
+                  priority: "HIGH",
+                  order: 5,
+                  manHours: 0.5,
+                  departmentId: getDeptId("All Departments"),
+                },
+                {
+                  name: "$$$ Confirm and Update Invoice",
+                  description: "Update and confirm invoice",
+                  priority: "HIGH",
+                  order: 6,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Finance"),
+                },
+              ],
+            },
+          },
+          {
+            name: "Design",
+            description: "Design and approval phase",
+            order: 2,
+            tasks: {
+              create: [
+                {
+                  name: "Pre-Design Layout Meeting",
+                  description: "Meeting to discuss design layout",
+                  priority: "HIGH",
+                  order: 1,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "Create and verify Template",
+                  description: "Create and verify design template",
                   priority: "HIGH",
                   order: 2,
-                  manHours: 4,
+                  manHours: 1,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Start High Res Design",
+                  description: "Begin high resolution design work",
+                  priority: "HIGH",
+                  order: 3,
+                  manHours: 1.5,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Art Direction Sign Off",
+                  description: "Get art direction approval",
+                  priority: "HIGH",
+                  order: 4,
+                  manHours: 0.083,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "Customer Sign Off",
+                  description: "Get customer approval",
+                  priority: "HIGH",
+                  order: 5,
+                  manHours: 0.083,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "Final Design",
+                  description: "Complete final design",
+                  priority: "HIGH",
+                  order: 6,
+                  manHours: 1.5,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Internal Proof",
+                  description: "Internal design proof review",
+                  priority: "HIGH",
+                  order: 7,
+                  manHours: 1.5,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Art Direction Sign Off",
+                  description: "Final art direction approval",
+                  priority: "HIGH",
+                  order: 8,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "Customer Sign Off",
+                  description: "Final customer approval",
+                  priority: "HIGH",
+                  order: 9,
+                  manHours: 0.083,
+                  departmentId: getDeptId("Project Management"),
+                },
+                {
+                  name: "$$$ Confirm Customer Deposit",
+                  description: "Confirm customer deposit received",
+                  priority: "HIGH",
+                  order: 10,
+                  manHours: 0.083,
+                  departmentId: getDeptId("Finance"),
+                },
+                {
+                  name: "Firm Hold Schedule Installation Drop Off",
+                  description: "Schedule installation and drop off",
+                  priority: "HIGH",
+                  order: 11,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Project Management"),
                 },
               ],
             },
           },
           {
             name: "Production",
-            description: "Vehicle wrap production phase",
-            order: 2,
-            tasks: {
-              create: [
-                {
-                  name: "Material Preparation",
-                  description: "Prepare wrap materials",
-                  priority: "MEDIUM",
-                  order: 1,
-                  manHours: 4,
-                },
-                {
-                  name: "Installation",
-                  description: "Install vehicle wrap",
-                  priority: "HIGH",
-                  order: 2,
-                  manHours: 8,
-                },
-              ],
-            },
-          },
-          {
-            name: "Quality Control",
-            description: "Final inspection and client approval",
+            description: "Production and materials phase",
             order: 3,
             tasks: {
               create: [
                 {
-                  name: "Final Inspection",
-                  description: "Quality check of installed wrap",
+                  name: "Order Raw Materials",
+                  description: "Order necessary materials",
                   priority: "HIGH",
                   order: 1,
-                  manHours: 2,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Project Management"),
                 },
                 {
-                  name: "Client Approval",
-                  description: "Get final client sign-off",
+                  name: "Make Installer Sheet",
+                  description: "Prepare installer documentation",
                   priority: "HIGH",
                   order: 2,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Installation"),
+                },
+                {
+                  name: "Print Ready Files Blue Prints and Review",
+                  description: "Prepare and review print files",
+                  priority: "HIGH",
+                  order: 3,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Create Test Print",
+                  description: "Create and review test print",
+                  priority: "HIGH",
+                  order: 4,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Pre Install Meeting",
+                  description: "Pre-installation planning meeting",
+                  priority: "HIGH",
+                  order: 5,
                   manHours: 1,
+                  departmentId: getDeptId("Production"),
+                },
+                {
+                  name: "Paneling",
+                  description: "Panel preparation",
+                  priority: "HIGH",
+                  order: 6,
+                  manHours: 2,
+                  departmentId: getDeptId("Graphic Design"),
+                },
+                {
+                  name: "Printing",
+                  description: "Print production",
+                  priority: "HIGH",
+                  order: 7,
+                  manHours: 1,
+                  departmentId: getDeptId("Production"),
+                },
+                {
+                  name: "Lamination & Rough QC",
+                  description: "Lamination and initial quality check",
+                  priority: "HIGH",
+                  order: 8,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Production"),
+                },
+                {
+                  name: "Trim & Sew",
+                  description: "Trim and sew materials",
+                  priority: "HIGH",
+                  order: 9,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Production"),
+                },
+                {
+                  name: "Plot",
+                  description: "Plot production",
+                  priority: "HIGH",
+                  order: 10,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Production"),
+                },
+                {
+                  name: "Project Inventory Control / QC",
+                  description: "Inventory control and quality check",
+                  priority: "HIGH",
+                  order: 11,
+                  manHours: 0.167,
+                  departmentId: getDeptId("Production"),
                 },
               ],
             },
           },
-        ],
-      },
-    },
-  });
-
-  const signWorkflow = await prisma.workflow.upsert({
-    where: { id: "sign-workflow" },
-    update: {},
-    create: {
-      id: "sign-workflow",
-      name: "Sign Project Standard",
-      description: "Standard workflow for sign projects",
-      phases: {
-        create: [
           {
-            name: "Design",
-            description: "Design and planning phase",
-            order: 1,
+            name: "Prep",
+            description: "Preparation phase",
+            order: 4,
             tasks: {
               create: [
                 {
-                  name: "Design Creation",
-                  description: "Create initial design",
+                  name: "Intake of Item",
+                  description: "Initial item intake process",
                   priority: "HIGH",
                   order: 1,
-                  manHours: 4,
+                  manHours: 0.25,
+                  departmentId: getDeptId("All Departments"),
+                },
+                {
+                  name: "Wrap Plan Set Up",
+                  description: "Set up wrap plan",
+                  priority: "HIGH",
+                  order: 2,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Installation"),
+                },
+                {
+                  name: "Repairs & Vinyl Adhesive Removal",
+                  description: "Repairs and removal of old materials",
+                  priority: "HIGH",
+                  order: 3,
+                  manHours: 35,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Prep Clean",
+                  description: "Final preparation cleaning",
+                  priority: "HIGH",
+                  order: 4,
+                  manHours: 1.5,
+                  departmentId: getDeptId("Prep"),
                 },
               ],
             },
           },
           {
-            name: "Production",
-            description: "Sign production phase",
-            order: 2,
+            name: "Body Work",
+            description: "Body work phase",
+            order: 5,
             tasks: {
               create: [
                 {
-                  name: "Material Selection",
-                  description: "Select and order materials",
+                  name: "Putty",
+                  description: "Apply putty",
                   priority: "MEDIUM",
                   order: 1,
-                  manHours: 2,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Bondo",
+                  description: "Apply bondo",
+                  priority: "MEDIUM",
+                  order: 2,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Dent Removal",
+                  description: "Remove dents",
+                  priority: "MEDIUM",
+                  order: 3,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
                 },
                 {
                   name: "Fabrication",
-                  description: "Fabricate the sign",
+                  description: "Fabrication work",
+                  priority: "MEDIUM",
+                  order: 4,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+              ],
+            },
+          },
+          {
+            name: "Paint",
+            description: "Paint application phase",
+            order: 6,
+            tasks: {
+              create: [
+                {
+                  name: "Surface Prep / Degrease",
+                  description: "Prepare surface and degrease",
+                  priority: "HIGH",
+                  order: 1,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Masking",
+                  description: "Apply masking",
                   priority: "HIGH",
                   order: 2,
-                  manHours: 8,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Primer",
+                  description: "Apply primer",
+                  priority: "HIGH",
+                  order: 3,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Paint",
+                  description: "Apply paint",
+                  priority: "HIGH",
+                  order: 4,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Specialty Paint/ Texture/ Bedliner",
+                  description: "Apply specialty finishes",
+                  priority: "HIGH",
+                  order: 5,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
+                },
+                {
+                  name: "Removal of Masking",
+                  description: "Remove masking",
+                  priority: "HIGH",
+                  order: 6,
+                  manHours: 0,
+                  departmentId: getDeptId("Prep"),
                 },
               ],
             },
           },
           {
             name: "Installation",
-            description: "Sign installation phase",
-            order: 3,
+            description: "Final installation phase",
+            order: 7,
             tasks: {
               create: [
                 {
-                  name: "Site Preparation",
-                  description: "Prepare installation site",
-                  priority: "MEDIUM",
-                  order: 1,
-                  manHours: 4,
-                },
-                {
-                  name: "Installation",
-                  description: "Install the sign",
-                  priority: "HIGH",
-                  order: 2,
-                  manHours: 6,
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  });
-
-  const muralWorkflow = await prisma.workflow.upsert({
-    where: { id: "mural-workflow" },
-    update: {},
-    create: {
-      id: "mural-workflow",
-      name: "Mural Project Standard",
-      description: "Standard workflow for mural projects",
-      phases: {
-        create: [
-          {
-            name: "Design",
-            description: "Design and planning phase",
-            order: 1,
-            tasks: {
-              create: [
-                {
-                  name: "Site Survey",
-                  description: "Survey the mural location",
+                  name: "Dry Hang and Photos",
+                  description: "Initial dry fit and documentation",
                   priority: "HIGH",
                   order: 1,
-                  manHours: 2,
+                  manHours: 0.333,
+                  departmentId: getDeptId("Installation"),
                 },
                 {
-                  name: "Design Creation",
-                  description: "Create mural design",
+                  name: "Install",
+                  description: "Main installation process",
                   priority: "HIGH",
                   order: 2,
-                  manHours: 8,
+                  manHours: 17.6,
+                  departmentId: getDeptId("Installation"),
                 },
                 {
-                  name: "Client Approval",
-                  description: "Get client approval on design",
+                  name: "Post Wrap",
+                  description: "Post-installation wrap up",
                   priority: "HIGH",
                   order: 3,
-                  manHours: 2,
+                  manHours: 0.75,
+                  departmentId: getDeptId("Prep"),
                 },
-              ],
-            },
-          },
-          {
-            name: "Preparation",
-            description: "Surface preparation phase",
-            order: 2,
-            tasks: {
-              create: [
                 {
-                  name: "Surface Cleaning",
-                  description: "Clean and prepare the surface",
+                  name: "QC and Photos",
+                  description: "Quality control and documentation",
                   priority: "HIGH",
-                  order: 1,
-                  manHours: 4,
+                  order: 4,
+                  manHours: 0.5,
+                  departmentId: getDeptId("Prep"),
                 },
                 {
-                  name: "Priming",
-                  description: "Prime the surface",
+                  name: "$$$ Balance",
+                  description: "Process final payment",
                   priority: "HIGH",
-                  order: 2,
-                  manHours: 4,
+                  order: 5,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Finance"),
                 },
-              ],
-            },
-          },
-          {
-            name: "Painting",
-            description: "Mural painting phase",
-            order: 3,
-            tasks: {
-              create: [
                 {
-                  name: "Base Colors",
-                  description: "Apply base colors",
+                  name: "Reveal",
+                  description: "Project reveal to client",
                   priority: "HIGH",
-                  order: 1,
-                  manHours: 8,
+                  order: 6,
+                  manHours: 0.5,
+                  departmentId: getDeptId("All Departments"),
                 },
                 {
-                  name: "Details",
-                  description: "Paint detailed elements",
+                  name: "Debrief all Depts",
+                  description: "Department debrief meeting",
                   priority: "HIGH",
-                  order: 2,
-                  manHours: 16,
+                  order: 7,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Project Management"),
                 },
                 {
-                  name: "Final Touches",
-                  description: "Add finishing touches",
-                  priority: "MEDIUM",
-                  order: 3,
-                  manHours: 4,
-                },
-              ],
-            },
-          },
-          {
-            name: "Completion",
-            description: "Project completion phase",
-            order: 4,
-            tasks: {
-              create: [
-                {
-                  name: "Quality Check",
-                  description: "Final quality inspection",
+                  name: "Close Project",
+                  description: "Project closure procedures",
                   priority: "HIGH",
-                  order: 1,
-                  manHours: 2,
-                },
-                {
-                  name: "Protective Coating",
-                  description: "Apply protective coating",
-                  priority: "HIGH",
-                  order: 2,
-                  manHours: 4,
-                },
-                {
-                  name: "Client Sign-off",
-                  description: "Get final client approval",
-                  priority: "HIGH",
-                  order: 3,
-                  manHours: 1,
+                  order: 8,
+                  manHours: 0.25,
+                  departmentId: getDeptId("Project Management"),
                 },
               ],
             },

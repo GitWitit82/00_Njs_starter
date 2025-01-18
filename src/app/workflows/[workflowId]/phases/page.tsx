@@ -27,6 +27,16 @@ export default async function WorkflowPhasesPage({ params }: PageProps) {
         orderBy: {
           order: "asc",
         },
+        include: {
+          tasks: {
+            include: {
+              department: true
+            },
+            orderBy: {
+              order: "asc"
+            }
+          }
+        }
       },
     },
   })
